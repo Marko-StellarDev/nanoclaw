@@ -1,6 +1,6 @@
 # NanoClaw Project Status
 
-**Last Updated:** 2026-03-02 (Session 5+6 Complete)
+**Last Updated:** 2026-03-02 (Session 5+6+7 Complete)
 **Session Recovery Document** - Read this first when reopening terminal
 
 ---
@@ -299,6 +299,12 @@ npm install && npm run build
 - Removed @mention requirement: all messages processed, dedup for @mentions
 - Added Audit Log UI page with live auto-refresh
 - Added tool-use activity logging: .activity.jsonl hook + API merge + UI display
+
+### Session 7 (2026-03-02)
+- Model tracking in audit log: `model` column added to `task_run_logs` (auto-migrated)
+- Task scheduler logs `MODEL_DEFAULT` on every run
+- `AuditEvent` + API surface `model` field
+- Audit UI shows compact model tag (`sonnet-4.6`) on task rows only
 
 ### Session 5 (2026-03-02)
 - Chat input per group on Dashboard (Enter to send, Shift+Enter newline, optimistic UI)

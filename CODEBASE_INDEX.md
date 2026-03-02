@@ -168,7 +168,8 @@ Container (per group)
   - Session: `getSession()`, `saveSession()`
   - Groups: `getAllRegisteredGroups()`, `registerGroup()`
   - Audit: `getAuditEvents(limit, folder?)` - UNION of messages + task_run_logs, newest-first
-  - `AuditEvent` interface: `type: 'user' | 'bot' | 'task' | 'activity'`, `tool?: string`
+  - `AuditEvent` interface: `type: 'user' | 'bot' | 'task' | 'activity'`, `tool?: string`, `model?: string`
+  - `task_run_logs` schema now includes `model TEXT` (migrated); populated by task-scheduler with `MODEL_DEFAULT`
 
 ### Channels
 
@@ -326,7 +327,7 @@ Container (per group)
 - **Dashboard** — group cards with live chat input (Enter to send), pulsing green dot + typing indicator when agent is thinking (polls `/api/status` every 5s), auto-refreshes messages
 - **KEB Ops** — branch network, token usage stats, tasks, message history
 - **Tasks** — task table with pause/resume/cancel buttons, `scheduleLabel()` converts cron/ms/once to plain English; "+ New Task" form with preset schedule dropdown (14 cron, 8 interval presets + datetime-local picker for once; "Custom…" reveals raw input)
-- **Audit Log** — messages + task runs + tool activity, live 5s refresh
+- **Audit Log** — messages + task runs + tool activity, live 5s refresh; task rows show model tag (e.g. `sonnet-4.6`)
 - Proxies `/api` to `:3001` via `proxy.conf.json` — **must use `npm start`**, not `npx ng serve`
 
 ### Utilities
