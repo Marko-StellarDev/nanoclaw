@@ -1,6 +1,6 @@
 # NanoClaw Project Status
 
-**Last Updated:** 2026-03-02 (Session 4 Complete)
+**Last Updated:** 2026-03-02 (Session 5 Complete)
 **Session Recovery Document** - Read this first when reopening terminal
 
 ---
@@ -14,7 +14,7 @@
 - `#testing` registered as `keb-ops` group — KEB Ops SOUL.md active
 - Main DM (`slack:D0AHNS5EP2P`) registered as `main` group
 - REST API on `:3001` — live and responding
-- Angular UI on `:4200` — Dashboard, KEB Ops, Tasks, **Audit Log** pages
+- Angular UI on `:4200` — Dashboard (chat input + live status), KEB Ops, Tasks (controls + create form), Audit Log
 
 ### When You Open Terminal Next Time
 1. Check if bot is still running: `ps aux | grep "src/index.ts"`
@@ -299,6 +299,13 @@ npm install && npm run build
 - Removed @mention requirement: all messages processed, dedup for @mentions
 - Added Audit Log UI page with live auto-refresh
 - Added tool-use activity logging: .activity.jsonl hook + API merge + UI display
+
+### Session 5 (2026-03-02)
+- Chat input per group on Dashboard (Enter to send, Shift+Enter newline, optimistic UI)
+- Live agent status: src/agent-status.ts + GroupQueue integration + pulsing dot + typing animation
+- Task controls: pause/resume/cancel buttons on every task row
+- Task creation form: "+ New Task" with group, schedule type/value, context mode, prompt
+- New API endpoints: GET /api/status, POST /api/groups/:folder/message, POST/DELETE /api/tasks/*
 
 ---
 
