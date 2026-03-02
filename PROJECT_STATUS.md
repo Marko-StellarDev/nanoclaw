@@ -1,6 +1,6 @@
 # NanoClaw Project Status
 
-**Last Updated:** 2026-03-02 (Session 5+6+7+8 Complete, upstream v1.1.6 merged)
+**Last Updated:** 2026-03-02 (Session 9: Sci-fi UI redesign complete)
 **Session Recovery Document** - Read this first when reopening terminal
 
 ---
@@ -309,6 +309,21 @@ npm install && npm run build
 - Removed @mention requirement: all messages processed, dedup for @mentions
 - Added Audit Log UI page with live auto-refresh
 - Added tool-use activity logging: .activity.jsonl hook + API merge + UI display
+
+### Session 9 — UI Redesign (2026-03-02)
+- Complete sci-fi "neural interface" redesign of Angular UI
+- **Theme:** void black (#040d18), electric cyan (#00c8ff), matrix green (#00ff88)
+- **Typography:** JetBrains Mono (data/mono), Rajdhani (headings/nav)
+- **Animation:** Canvas particle network in app background (70 nodes, animated connections)
+- **Cards:** Glassmorphism with corner-bracket decorations (::before/::after)
+- **Status indicators:** Breathing green glow dots, cyan pulsing processing indicator
+- **Pages:** All 4 pages restyled (SYSTEM, KEB OPS, TASK SCHEDULER, AUDIT STREAM)
+  - Terminal-style message stream in Dashboard
+  - Segmented budget bar in KEB Ops with branch node indexing
+  - Monospace "directive" styling in Tasks
+  - Live event feed with row tints by type in Audit
+- `ui/angular.json`: raised component style budget 2kb→8kb (warning), 4kb→16kb (error)
+- Build: clean, all lazy chunks working
 
 ### Session 8 (2026-03-02)
 - Default model changed to haiku (fast, cheap)
