@@ -310,7 +310,7 @@ npm install && npm run build
 - Added Audit Log UI page with live auto-refresh
 - Added tool-use activity logging: .activity.jsonl hook + API merge + UI display
 
-### Session 9 — UI Redesign (2026-03-02)
+### Session 9 — Analytics + UI Redesign (2026-03-02)
 - Complete sci-fi "neural interface" redesign of Angular UI
 - **Theme:** void black (#040d18), electric cyan (#00c8ff), matrix green (#00ff88)
 - **Typography:** JetBrains Mono (data/mono), Rajdhani (headings/nav)
@@ -324,6 +324,16 @@ npm install && npm run build
   - Live event feed with row tints by type in Audit
 - `ui/angular.json`: raised component style budget 2kb→8kb (warning), 4kb→16kb (error)
 - Build: clean, all lazy chunks working
+
+### Analytics page additions (same session)
+- New `/analytics` route + sidebar link (◎ ANALYTICS)
+- 4 stat cards: cost this month, tokens, cache hit rate, avg/run
+- Canvas bar chart: 6-month cost trend, per-group colour coding
+- CSS stacked token breakdown bars (input/output/cache-write/cache-read)
+- Model pricing reference (haiku/sonnet/opus, active model badge)
+- Usage history table with per-row cost and budget bar
+- Pricing: haiku $0.80/$4.00, sonnet $3.00/$15.00, opus $15.00/$75.00 per 1M tokens
+- Added `model?: string` to `MonthlyUsage` interface in api.service.ts
 
 ### Session 8 (2026-03-02)
 - Default model changed to haiku (fast, cheap)
