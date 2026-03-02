@@ -2,10 +2,15 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 
-import { ASSISTANT_NAME, DATA_DIR, MODEL_DEFAULT, STORE_DIR } from './config.js';
+import { ASSISTANT_NAME, DATA_DIR, STORE_DIR } from './config.js';
 import { isValidGroupFolder } from './group-folder.js';
 import { logger } from './logger.js';
-import { NewMessage, RegisteredGroup, ScheduledTask, TaskRunLog } from './types.js';
+import {
+  NewMessage,
+  RegisteredGroup,
+  ScheduledTask,
+  TaskRunLog,
+} from './types.js';
 
 let db: Database.Database;
 
@@ -94,48 +99,30 @@ function createSchema(database: Database.Database): void {
       `ALTER TABLE messages ADD COLUMN is_bot_message INTEGER DEFAULT 0`,
     );
     // Backfill: mark existing bot messages that used the content prefix pattern
-    database.prepare(
-      `UPDATE messages SET is_bot_message = 1 WHERE content LIKE ?`,
-    ).run(`${ASSISTANT_NAME}:%`);
+    database
+      .prepare(`UPDATE messages SET is_bot_message = 1 WHERE content LIKE ?`)
+      .run(`${ASSISTANT_NAME}:%`);
   } catch {
     /* column already exists */
   }
-
-  // Add model column to task_run_logs if it doesn't exist (migration for existing DBs)
-  try {
-    database.exec(`ALTER TABLE task_run_logs ADD COLUMN model TEXT`);
-  } catch {
-    /* column already exists */
-  }
-  // Backfill existing task_run_logs rows that predate this column
-  database.prepare(
-    `UPDATE task_run_logs SET model = ? WHERE model IS NULL`,
-  ).run(MODEL_DEFAULT);
-
-  // Add model column to messages if it doesn't exist (migration for existing DBs)
-  try {
-    database.exec(`ALTER TABLE messages ADD COLUMN model TEXT`);
-  } catch {
-    /* column already exists */
-  }
-  // Backfill existing bot message rows
-  database.prepare(
-    `UPDATE messages SET model = ? WHERE model IS NULL AND is_bot_message = 1`,
-  ).run(MODEL_DEFAULT);
 
   // Add channel and is_group columns if they don't exist (migration for existing DBs)
   try {
-    database.exec(
-      `ALTER TABLE chats ADD COLUMN channel TEXT`,
-    );
-    database.exec(
-      `ALTER TABLE chats ADD COLUMN is_group INTEGER DEFAULT 0`,
-    );
+    database.exec(`ALTER TABLE chats ADD COLUMN channel TEXT`);
+    database.exec(`ALTER TABLE chats ADD COLUMN is_group INTEGER DEFAULT 0`);
     // Backfill from JID patterns
-    database.exec(`UPDATE chats SET channel = 'whatsapp', is_group = 1 WHERE jid LIKE '%@g.us'`);
-    database.exec(`UPDATE chats SET channel = 'whatsapp', is_group = 0 WHERE jid LIKE '%@s.whatsapp.net'`);
-    database.exec(`UPDATE chats SET channel = 'discord', is_group = 1 WHERE jid LIKE 'dc:%'`);
-    database.exec(`UPDATE chats SET channel = 'telegram', is_group = 1 WHERE jid LIKE 'tg:%'`);
+    database.exec(
+      `UPDATE chats SET channel = 'whatsapp', is_group = 1 WHERE jid LIKE '%@g.us'`,
+    );
+    database.exec(
+      `UPDATE chats SET channel = 'whatsapp', is_group = 0 WHERE jid LIKE '%@s.whatsapp.net'`,
+    );
+    database.exec(
+      `UPDATE chats SET channel = 'discord', is_group = 1 WHERE jid LIKE 'dc:%'`,
+    );
+    database.exec(
+      `UPDATE chats SET channel = 'telegram', is_group = 1 WHERE jid LIKE 'tg:%'`,
+    );
   } catch {
     /* columns already exist */
   }
@@ -276,7 +263,7 @@ export function storeMessage(msg: NewMessage): void {
 }
 
 /**
- * Store a message directly (for channels like Slack, Telegram, etc.).
+ * Store a message directly (for non-WhatsApp channels that don't use Baileys proto).
  */
 export function storeMessageDirect(msg: {
   id: string;
@@ -287,10 +274,9 @@ export function storeMessageDirect(msg: {
   timestamp: string;
   is_from_me: boolean;
   is_bot_message?: boolean;
-  model?: string;
 }): void {
   db.prepare(
-    `INSERT OR REPLACE INTO messages (id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message, model) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR REPLACE INTO messages (id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     msg.id,
     msg.chat_jid,
@@ -300,7 +286,6 @@ export function storeMessageDirect(msg: {
     msg.timestamp,
     msg.is_from_me ? 1 : 0,
     msg.is_bot_message ? 1 : 0,
-    msg.model ?? null,
   );
 }
 
@@ -353,96 +338,6 @@ export function getMessagesSince(
   return db
     .prepare(sql)
     .all(chatJid, sinceTimestamp, `${botPrefix}:%`) as NewMessage[];
-}
-
-export interface MessageRow {
-  id: string;
-  chat_jid: string;
-  sender: string;
-  sender_name: string;
-  content: string;
-  timestamp: string;
-  is_from_me: number;
-  is_bot_message: number;
-}
-
-/**
- * Get the most recent N messages for a group, identified by folder name.
- * Returns newest-first so the caller can reverse if needed.
- */
-export function getRecentMessages(folder: string, limit = 50): MessageRow[] {
-  const group = db
-    .prepare(`SELECT jid FROM registered_groups WHERE folder = ?`)
-    .get(folder) as { jid: string } | undefined;
-  if (!group) return [];
-
-  return db
-    .prepare(
-      `SELECT id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message
-       FROM messages WHERE chat_jid = ?
-       ORDER BY timestamp DESC LIMIT ?`,
-    )
-    .all(group.jid, limit) as MessageRow[];
-}
-
-export interface AuditEvent {
-  id: string;
-  ts: string;
-  group_folder: string;
-  group_name: string;
-  type: 'user' | 'bot' | 'task' | 'activity';
-  summary: string;
-  detail: string;
-  status?: string; // for task events: 'success' | 'error'
-  tool?: string;   // for activity events: tool name (Bash, WebFetch, etc.)
-  model?: string;  // for task events: model used (e.g. claude-sonnet-4-6)
-}
-
-/**
- * Unified audit event feed — messages (user + bot) and task run logs,
- * sorted newest-first. Optionally filtered to a single group folder.
- */
-export function getAuditEvents(limit = 100, folder?: string): AuditEvent[] {
-  const folderFilter = folder ? `AND rg.folder = ?` : '';
-  const args: (string | number)[] = folder ? [folder, folder, limit] : [limit];
-
-  const rows = db.prepare(`
-    SELECT
-      'msg-' || m.id || '-' || m.chat_jid AS id,
-      m.timestamp AS ts,
-      rg.folder AS group_folder,
-      rg.name AS group_name,
-      CASE WHEN m.is_bot_message = 1 THEN 'bot' ELSE 'user' END AS type,
-      SUBSTR(m.content, 1, 100) AS summary,
-      m.content AS detail,
-      NULL AS status,
-      m.model AS model
-    FROM messages m
-    JOIN registered_groups rg ON m.chat_jid = rg.jid
-    WHERE 1=1 ${folderFilter}
-
-    UNION ALL
-
-    SELECT
-      'task-' || trl.id AS id,
-      trl.run_at AS ts,
-      st.group_folder,
-      COALESCE(rg.name, st.group_folder) AS group_name,
-      'task' AS type,
-      SUBSTR(st.prompt, 1, 100) AS summary,
-      COALESCE(trl.result, trl.error, '') AS detail,
-      trl.status,
-      trl.model
-    FROM task_run_logs trl
-    JOIN scheduled_tasks st ON trl.task_id = st.id
-    LEFT JOIN registered_groups rg ON st.group_folder = rg.folder
-    WHERE 1=1 ${folderFilter ? `AND st.group_folder = ?` : ''}
-
-    ORDER BY ts DESC
-    LIMIT ?
-  `).all(...args) as AuditEvent[];
-
-  return rows;
 }
 
 export function createTask(
@@ -565,8 +460,8 @@ export function updateTaskAfterRun(
 export function logTaskRun(log: TaskRunLog): void {
   db.prepare(
     `
-    INSERT INTO task_run_logs (task_id, run_at, duration_ms, status, result, error, model)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO task_run_logs (task_id, run_at, duration_ms, status, result, error)
+    VALUES (?, ?, ?, ?, ?, ?)
   `,
   ).run(
     log.task_id,
@@ -575,7 +470,6 @@ export function logTaskRun(log: TaskRunLog): void {
     log.status,
     log.result,
     log.error,
-    log.model ?? null,
   );
 }
 
@@ -655,14 +549,12 @@ export function getRegisteredGroup(
     containerConfig: row.container_config
       ? JSON.parse(row.container_config)
       : undefined,
-    requiresTrigger: row.requires_trigger === null ? undefined : row.requires_trigger === 1,
+    requiresTrigger:
+      row.requires_trigger === null ? undefined : row.requires_trigger === 1,
   };
 }
 
-export function setRegisteredGroup(
-  jid: string,
-  group: RegisteredGroup,
-): void {
+export function setRegisteredGroup(jid: string, group: RegisteredGroup): void {
   if (!isValidGroupFolder(group.folder)) {
     throw new Error(`Invalid group folder "${group.folder}" for JID ${jid}`);
   }
@@ -681,9 +573,7 @@ export function setRegisteredGroup(
 }
 
 export function getAllRegisteredGroups(): Record<string, RegisteredGroup> {
-  const rows = db
-    .prepare('SELECT * FROM registered_groups')
-    .all() as Array<{
+  const rows = db.prepare('SELECT * FROM registered_groups').all() as Array<{
     jid: string;
     name: string;
     folder: string;
@@ -709,10 +599,163 @@ export function getAllRegisteredGroups(): Record<string, RegisteredGroup> {
       containerConfig: row.container_config
         ? JSON.parse(row.container_config)
         : undefined,
-      requiresTrigger: row.requires_trigger === null ? undefined : row.requires_trigger === 1,
+      requiresTrigger:
+        row.requires_trigger === null ? undefined : row.requires_trigger === 1,
     };
   }
   return result;
+}
+
+// --- Web UI / Audit queries ---
+
+/**
+ * Return the most recent messages for a group folder (for the dashboard UI).
+ * Ordered newest-first; caller can reverse for chronological display.
+ */
+export function getRecentMessages(
+  folder: string,
+  limit: number,
+): Array<{
+  id: string;
+  sender: string;
+  sender_name: string;
+  content: string;
+  timestamp: string;
+  is_from_me: number;
+  is_bot_message: number;
+}> {
+  const groupRow = db
+    .prepare(`SELECT jid FROM registered_groups WHERE folder = ?`)
+    .get(folder) as { jid: string } | undefined;
+  if (!groupRow) return [];
+  return db
+    .prepare(
+      `SELECT id, sender, sender_name, content, timestamp, is_from_me, is_bot_message
+       FROM messages
+       WHERE chat_jid = ?
+       ORDER BY timestamp DESC
+       LIMIT ?`,
+    )
+    .all(groupRow.jid, limit) as Array<{
+    id: string;
+    sender: string;
+    sender_name: string;
+    content: string;
+    timestamp: string;
+    is_from_me: number;
+    is_bot_message: number;
+  }>;
+}
+
+export interface AuditEvent {
+  id: string | number;
+  ts: string;
+  group_folder: string;
+  group_name: string;
+  type: 'user' | 'bot' | 'task' | 'activity';
+  summary: string;
+  detail?: string;
+  tool?: string;
+  model?: string;
+}
+
+/**
+ * Return a merged, newest-first list of message and task-run audit events.
+ * Optionally filtered to a single group folder.
+ */
+export function getAuditEvents(limit: number, folder?: string): AuditEvent[] {
+  const groups = getAllRegisteredGroups();
+  const folderToInfo = Object.fromEntries(
+    Object.entries(groups).map(([jid, g]) => [g.folder, { jid, name: g.name }]),
+  );
+  const jidToGroup = Object.fromEntries(
+    Object.entries(groups).map(([jid, g]) => [jid, g]),
+  );
+
+  // Messages query
+  const msgParams: unknown[] = [];
+  let msgWhere = '';
+  if (folder) {
+    const info = folderToInfo[folder];
+    if (!info) return [];
+    msgWhere = 'WHERE chat_jid = ?';
+    msgParams.push(info.jid);
+  }
+  msgParams.push(limit);
+
+  const msgRows = db
+    .prepare(
+      `SELECT id, timestamp, chat_jid, sender_name, content, is_bot_message
+       FROM messages
+       ${msgWhere}
+       ORDER BY timestamp DESC
+       LIMIT ?`,
+    )
+    .all(...msgParams) as Array<{
+    id: string;
+    timestamp: string;
+    chat_jid: string;
+    sender_name: string;
+    content: string;
+    is_bot_message: number;
+  }>;
+
+  // Task run logs query
+  const taskParams: unknown[] = [];
+  let taskWhere = '';
+  if (folder) {
+    taskWhere = 'WHERE st.group_folder = ?';
+    taskParams.push(folder);
+  }
+  taskParams.push(limit);
+
+  const taskRows = db
+    .prepare(
+      `SELECT tl.id, tl.run_at, tl.status, tl.result, st.group_folder, st.prompt
+       FROM task_run_logs tl
+       JOIN scheduled_tasks st ON tl.task_id = st.id
+       ${taskWhere}
+       ORDER BY tl.run_at DESC
+       LIMIT ?`,
+    )
+    .all(...taskParams) as Array<{
+    id: number;
+    run_at: string;
+    status: string;
+    result: string | null;
+    group_folder: string;
+    prompt: string;
+  }>;
+
+  const msgEvents: AuditEvent[] = msgRows.map((row) => {
+    const g = jidToGroup[row.chat_jid];
+    return {
+      id: row.id,
+      ts: row.timestamp,
+      group_folder: g?.folder || 'unknown',
+      group_name: g?.name || row.chat_jid,
+      type: row.is_bot_message ? 'bot' : 'user',
+      summary: row.content.slice(0, 120),
+      detail: row.content,
+    };
+  });
+
+  const taskEvents: AuditEvent[] = taskRows.map((row) => {
+    const info = folderToInfo[row.group_folder];
+    return {
+      id: row.id,
+      ts: row.run_at,
+      group_folder: row.group_folder,
+      group_name: info?.name || row.group_folder,
+      type: 'task',
+      summary: row.prompt.slice(0, 80),
+      detail: row.result || undefined,
+    };
+  });
+
+  return [...msgEvents, ...taskEvents]
+    .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
+    .slice(0, limit);
 }
 
 // --- JSON migration ---

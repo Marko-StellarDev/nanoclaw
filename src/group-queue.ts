@@ -4,7 +4,6 @@ import path from 'path';
 
 import { DATA_DIR, MAX_CONCURRENT_CONTAINERS } from './config.js';
 import { logger } from './logger.js';
-import { setAgentStatus, clearAgentStatus } from './agent-status.js';
 
 interface QueuedTask {
   id: string;
@@ -124,14 +123,16 @@ export class GroupQueue {
     );
   }
 
-  registerProcess(groupJid: string, proc: ChildProcess, containerName: string, groupFolder?: string): void {
+  registerProcess(
+    groupJid: string,
+    proc: ChildProcess,
+    containerName: string,
+    groupFolder?: string,
+  ): void {
     const state = this.getGroup(groupJid);
     state.process = proc;
     state.containerName = containerName;
-    if (groupFolder) {
-      state.groupFolder = groupFolder;
-      setAgentStatus(groupFolder, 'thinking');
-    }
+    if (groupFolder) state.groupFolder = groupFolder;
   }
 
   /**
@@ -152,7 +153,8 @@ export class GroupQueue {
    */
   sendMessage(groupJid: string, text: string): boolean {
     const state = this.getGroup(groupJid);
-    if (!state.active || !state.groupFolder || state.isTaskContainer) return false;
+    if (!state.active || !state.groupFolder || state.isTaskContainer)
+      return false;
     state.idleWaiting = false; // Agent is about to receive work, no longer idle
 
     const inputDir = path.join(DATA_DIR, 'ipc', state.groupFolder, 'input');
@@ -214,7 +216,6 @@ export class GroupQueue {
       logger.error({ groupJid, err }, 'Error processing messages for group');
       this.scheduleRetry(groupJid, state);
     } finally {
-      if (state.groupFolder) clearAgentStatus(state.groupFolder);
       state.active = false;
       state.process = null;
       state.containerName = null;
@@ -241,7 +242,6 @@ export class GroupQueue {
     } catch (err) {
       logger.error({ groupJid, taskId: task.id, err }, 'Error running task');
     } finally {
-      if (state.groupFolder) clearAgentStatus(state.groupFolder);
       state.active = false;
       state.isTaskContainer = false;
       state.process = null;
@@ -284,7 +284,10 @@ export class GroupQueue {
     if (state.pendingTasks.length > 0) {
       const task = state.pendingTasks.shift()!;
       this.runTask(groupJid, task).catch((err) =>
-        logger.error({ groupJid, taskId: task.id, err }, 'Unhandled error in runTask (drain)'),
+        logger.error(
+          { groupJid, taskId: task.id, err },
+          'Unhandled error in runTask (drain)',
+        ),
       );
       return;
     }
@@ -292,7 +295,10 @@ export class GroupQueue {
     // Then pending messages
     if (state.pendingMessages) {
       this.runForGroup(groupJid, 'drain').catch((err) =>
-        logger.error({ groupJid, err }, 'Unhandled error in runForGroup (drain)'),
+        logger.error(
+          { groupJid, err },
+          'Unhandled error in runForGroup (drain)',
+        ),
       );
       return;
     }
@@ -313,11 +319,17 @@ export class GroupQueue {
       if (state.pendingTasks.length > 0) {
         const task = state.pendingTasks.shift()!;
         this.runTask(nextJid, task).catch((err) =>
-          logger.error({ groupJid: nextJid, taskId: task.id, err }, 'Unhandled error in runTask (waiting)'),
+          logger.error(
+            { groupJid: nextJid, taskId: task.id, err },
+            'Unhandled error in runTask (waiting)',
+          ),
         );
       } else if (state.pendingMessages) {
         this.runForGroup(nextJid, 'drain').catch((err) =>
-          logger.error({ groupJid: nextJid, err }, 'Unhandled error in runForGroup (waiting)'),
+          logger.error(
+            { groupJid: nextJid, err },
+            'Unhandled error in runForGroup (waiting)',
+          ),
         );
       }
       // If neither pending, skip this group
@@ -329,7 +341,7 @@ export class GroupQueue {
 
     // Count active containers but don't kill them — they'll finish on their own
     // via idle timeout or container timeout. The --rm flag cleans them up on exit.
-    // This prevents channel reconnection restarts from killing working agents.
+    // This prevents WhatsApp reconnection restarts from killing working agents.
     const activeContainers: string[] = [];
     for (const [jid, state] of this.groups) {
       if (state.process && !state.process.killed && state.containerName) {

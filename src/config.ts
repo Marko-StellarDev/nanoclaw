@@ -6,15 +6,13 @@ import { readEnvFile } from './env.js';
 // Read config values from .env (falls back to process.env).
 // Secrets are NOT read here — they stay on disk and are loaded only
 // where needed (container-runner.ts) to avoid leaking to child processes.
-const envConfig = readEnvFile([
-  'ASSISTANT_NAME',
-  'ASSISTANT_HAS_OWN_NUMBER',
-]);
+const envConfig = readEnvFile(['ASSISTANT_NAME', 'ASSISTANT_HAS_OWN_NUMBER']);
 
 export const ASSISTANT_NAME =
-  process.env.ASSISTANT_NAME || envConfig.ASSISTANT_NAME || 'StellarBot';
+  process.env.ASSISTANT_NAME || envConfig.ASSISTANT_NAME || 'Andy';
 export const ASSISTANT_HAS_OWN_NUMBER =
-  (process.env.ASSISTANT_HAS_OWN_NUMBER || envConfig.ASSISTANT_HAS_OWN_NUMBER) === 'true';
+  (process.env.ASSISTANT_HAS_OWN_NUMBER ||
+    envConfig.ASSISTANT_HAS_OWN_NUMBER) === 'true';
 export const POLL_INTERVAL = 2000;
 export const SCHEDULER_POLL_INTERVAL = 60000;
 
@@ -45,10 +43,7 @@ export const CONTAINER_MAX_OUTPUT_SIZE = parseInt(
   10,
 ); // 10MB default
 export const IPC_POLL_INTERVAL = 1000;
-export const IDLE_TIMEOUT = parseInt(
-  process.env.IDLE_TIMEOUT || '1800000',
-  10,
-); // 30min default — how long to keep container alive after last result
+export const IDLE_TIMEOUT = parseInt(process.env.IDLE_TIMEOUT || '1800000', 10); // 30min default — how long to keep container alive after last result
 export const MAX_CONCURRENT_CONTAINERS = Math.max(
   1,
   parseInt(process.env.MAX_CONCURRENT_CONTAINERS || '5', 10) || 5,
@@ -68,17 +63,13 @@ export const TRIGGER_PATTERN = new RegExp(
 export const TIMEZONE =
   process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-// Model selection — passed to container via ContainerInput.model
-// Haiku is the default — fast and cheap, handles most tasks.
-// Agent can ask the user to resend with a prefix to upgrade:
-//   sonnet: <message>  → claude-sonnet-4-6
-//   opus:   <message>  → claude-opus-4-6
+// Model selection — default is haiku (fast/cheap).
+// Users can prefix a message with `sonnet:` or `opus:` to upgrade for that run.
 export const MODEL_DEFAULT = process.env.DEFAULT_MODEL || 'claude-haiku-4-5-20251001';
 export const MODEL_SONNET  = 'claude-sonnet-4-6';
 export const MODEL_COMPLEX = 'claude-opus-4-6';
 export const MODEL_FAST    = 'claude-haiku-4-5-20251001'; // same as default, kept for reference
 
-// Soft monthly token budget per group (warns in logs if exceeded, does not hard-block)
 export const MONTHLY_TOKEN_BUDGET = parseInt(
   process.env.MONTHLY_TOKEN_BUDGET || '500000',
   10,

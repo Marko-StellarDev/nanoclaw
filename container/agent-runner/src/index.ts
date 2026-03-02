@@ -27,21 +27,7 @@ interface ContainerInput {
   isMain: boolean;
   isScheduledTask?: boolean;
   assistantName?: string;
-  model?: string; // defaults to claude-sonnet-4-6 if not set
   secrets?: Record<string, string>;
-}
-
-interface RunUsage {
-  input_tokens: number;
-  output_tokens: number;
-  cache_read_input_tokens: number;
-  cache_creation_input_tokens: number;
-}
-
-interface MonthlyUsage extends RunUsage {
-  month: string;
-  runs: number;
-  last_updated: string;
 }
 
 interface ContainerOutput {
@@ -191,81 +177,10 @@ function createPreCompactHook(assistantName?: string): HookCallback {
       fs.writeFileSync(filePath, markdown);
 
       log(`Archived conversation to ${filePath}`);
-
-      // Also append session summary to CLAUDE.md Recent Sessions section
-      if (summary) {
-        appendSessionToClaude(summary, date);
-      }
     } catch (err) {
       log(`Failed to archive transcript: ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    return {};
-  };
-}
-
-/**
- * Generate a human-readable description of a tool call for the activity log.
- */
-function describeToolUse(toolName: string, toolInput: Record<string, unknown>): string {
-  switch (toolName) {
-    case 'Bash': {
-      const cmd = String(toolInput.command || '').replace(/\n/g, ' ').trim();
-      // agent-browser commands (look for URL patterns)
-      if (cmd.includes('agent-browser') || cmd.includes('chromium') || cmd.includes('puppeteer')) {
-        const urlMatch = cmd.match(/https?:\/\/[^\s'"]+/);
-        if (urlMatch) return `Opening browser: ${urlMatch[0]}`;
-        return 'Using browser automation';
-      }
-      const display = cmd.slice(0, 120);
-      return `Running: ${display}${cmd.length > 120 ? '…' : ''}`;
-    }
-    case 'WebFetch': {
-      const url = String(toolInput.url || '');
-      return `Fetching: ${url}`;
-    }
-    case 'WebSearch': {
-      const q = String(toolInput.query || '');
-      return `Searching web: ${q}`;
-    }
-    case 'Read':
-      return `Reading: ${path.basename(String(toolInput.file_path || ''))}`;
-    case 'Write':
-      return `Writing: ${path.basename(String(toolInput.file_path || ''))}`;
-    case 'Edit':
-      return `Editing: ${path.basename(String(toolInput.file_path || ''))}`;
-    case 'Glob':
-      return `Finding files: ${toolInput.pattern || ''}`;
-    case 'Grep':
-      return `Searching code: ${toolInput.pattern || ''}`;
-    case 'Task': {
-      const desc = String(toolInput.description || '');
-      return `Spawning agent: ${desc.slice(0, 80)}${desc.length > 80 ? '…' : ''}`;
-    }
-    case 'TodoWrite':
-      return 'Updating task list';
-    default:
-      return `Using ${toolName}`;
-  }
-}
-
-/**
- * Hook that logs every tool call as a JSONL entry to /workspace/group/.activity.jsonl.
- * This powers the "background process" view in the audit log UI.
- */
-function createActivityLogHook(): HookCallback {
-  const activityFile = '/workspace/group/.activity.jsonl';
-  return async (input, _toolUseId, _context) => {
-    const preInput = input as PreToolUseHookInput;
-    const toolName = (preInput as { tool_name?: string }).tool_name || 'Unknown';
-    const toolInput = (preInput.tool_input as Record<string, unknown>) || {};
-    try {
-      const description = describeToolUse(toolName, toolInput);
-      const entry = JSON.stringify({ ts: new Date().toISOString(), tool: toolName, description });
-      fs.appendFileSync(activityFile, entry + '\n');
-    } catch {
-      // Never fail the tool call due to a logging error
-    }
     return {};
   };
 }
@@ -292,55 +207,6 @@ function createSanitizeBashHook(): HookCallback {
       },
     };
   };
-}
-
-/**
- * Append a one-line session summary to the "Recent Sessions" section of CLAUDE.md.
- * Keeps only the last 10 entries to avoid unbounded growth.
- */
-function appendSessionToClaude(summary: string, date: string): void {
-  const claudeMdPath = '/workspace/group/CLAUDE.md';
-  if (!fs.existsSync(claudeMdPath)) return;
-
-  try {
-    let content = fs.readFileSync(claudeMdPath, 'utf-8');
-    const entry = `- ${date}: ${summary.slice(0, 120)}`;
-    const sectionHeader = '## Recent Sessions';
-
-    if (content.includes(sectionHeader)) {
-      // Insert after the section header (and any existing comment line)
-      const lines = content.split('\n');
-      const headerIdx = lines.findIndex(l => l.trim() === sectionHeader);
-      if (headerIdx !== -1) {
-        // Find where entries start (skip comment lines)
-        let insertAt = headerIdx + 1;
-        while (insertAt < lines.length && lines[insertAt].startsWith('<!--')) {
-          insertAt++;
-        }
-        lines.splice(insertAt, 0, entry);
-
-        // Keep only the last 10 session entries in this section
-        const entryStart = insertAt;
-        let entryEnd = entryStart;
-        while (entryEnd < lines.length && lines[entryEnd].startsWith('- ')) {
-          entryEnd++;
-        }
-        if (entryEnd - entryStart > 10) {
-          lines.splice(entryStart, entryEnd - entryStart - 10);
-        }
-
-        content = lines.join('\n');
-      }
-    } else {
-      // Append section at end
-      content += `\n${sectionHeader}\n${entry}\n`;
-    }
-
-    fs.writeFileSync(claudeMdPath, content);
-    log(`Appended session summary to CLAUDE.md`);
-  } catch (err) {
-    log(`Failed to update CLAUDE.md: ${err instanceof Error ? err.message : String(err)}`);
-  }
 }
 
 function sanitizeFilename(summary: string): string {
@@ -495,7 +361,7 @@ async function runQuery(
   containerInput: ContainerInput,
   sdkEnv: Record<string, string | undefined>,
   resumeAt?: string,
-): Promise<{ newSessionId?: string; lastAssistantUuid?: string; closedDuringQuery: boolean; usage: RunUsage }> {
+): Promise<{ newSessionId?: string; lastAssistantUuid?: string; closedDuringQuery: boolean }> {
   const stream = new MessageStream();
   stream.push(prompt);
 
@@ -524,28 +390,12 @@ async function runQuery(
   let lastAssistantUuid: string | undefined;
   let messageCount = 0;
   let resultCount = 0;
-  const totalUsage: RunUsage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
 
-  // Load SOUL.md (personality/identity) and global CLAUDE.md (shared instructions)
-  // SOUL.md = static personality, identity, instructions (doesn't change often)
-  // CLAUDE.md = dynamic memory, conversation state (changes frequently)
-  // global/CLAUDE.md = shared instructions across all groups
-  let systemPromptAppend = '';
-
-  // 1. Load per-group SOUL.md (if exists)
-  const soulMdPath = '/workspace/group/SOUL.md';
-  if (fs.existsSync(soulMdPath)) {
-    const soulMd = fs.readFileSync(soulMdPath, 'utf-8');
-    systemPromptAppend += soulMd + '\n\n';
-    log('Loaded SOUL.md');
-  }
-
-  // 2. Load global CLAUDE.md for non-main groups (shared context)
+  // Load global CLAUDE.md as additional system context (shared across all groups)
   const globalClaudeMdPath = '/workspace/global/CLAUDE.md';
+  let globalClaudeMd: string | undefined;
   if (!containerInput.isMain && fs.existsSync(globalClaudeMdPath)) {
-    const globalClaudeMd = fs.readFileSync(globalClaudeMdPath, 'utf-8');
-    systemPromptAppend += globalClaudeMd + '\n\n';
-    log('Loaded global CLAUDE.md');
+    globalClaudeMd = fs.readFileSync(globalClaudeMdPath, 'utf-8');
   }
 
   // Discover additional directories mounted at /workspace/extra/*
@@ -571,8 +421,8 @@ async function runQuery(
       additionalDirectories: extraDirs.length > 0 ? extraDirs : undefined,
       resume: sessionId,
       resumeSessionAt: resumeAt,
-      systemPrompt: systemPromptAppend
-        ? { type: 'preset' as const, preset: 'claude_code' as const, append: systemPromptAppend.trim() }
+      systemPrompt: globalClaudeMd
+        ? { type: 'preset' as const, preset: 'claude_code' as const, append: globalClaudeMd }
         : undefined,
       allowedTools: [
         'Bash',
@@ -601,10 +451,7 @@ async function runQuery(
       },
       hooks: {
         PreCompact: [{ hooks: [createPreCompactHook(containerInput.assistantName)] }],
-        PreToolUse: [
-          { matcher: 'Bash', hooks: [createSanitizeBashHook()] },
-          { hooks: [createActivityLogHook()] },
-        ],
+        PreToolUse: [{ matcher: 'Bash', hooks: [createSanitizeBashHook()] }],
       },
     }
   })) {
@@ -629,15 +476,7 @@ async function runQuery(
     if (message.type === 'result') {
       resultCount++;
       const textResult = 'result' in message ? (message as { result?: string }).result : null;
-      // Accumulate token usage from each result
-      const usage = (message as any).usage;
-      if (usage) {
-        totalUsage.input_tokens += usage.input_tokens || 0;
-        totalUsage.output_tokens += usage.output_tokens || 0;
-        totalUsage.cache_read_input_tokens += usage.cache_read_input_tokens || 0;
-        totalUsage.cache_creation_input_tokens += usage.cache_creation_input_tokens || 0;
-      }
-      log(`Result #${resultCount}: subtype=${message.subtype}${textResult ? ` text=${textResult.slice(0, 200)}` : ''}${usage ? ` tokens=${usage.input_tokens}in/${usage.output_tokens}out` : ''}`);
+      log(`Result #${resultCount}: subtype=${message.subtype}${textResult ? ` text=${textResult.slice(0, 200)}` : ''}`);
       writeOutput({
         status: 'success',
         result: textResult || null,
@@ -647,65 +486,8 @@ async function runQuery(
   }
 
   ipcPolling = false;
-  log(`Query done. Messages: ${messageCount}, results: ${resultCount}, lastAssistantUuid: ${lastAssistantUuid || 'none'}, closedDuringQuery: ${closedDuringQuery}, usage: ${totalUsage.input_tokens}in/${totalUsage.output_tokens}out`);
-  return { newSessionId, lastAssistantUuid, closedDuringQuery, usage: totalUsage };
-}
-
-// Soft monthly token budget — warns in logs but does not block the agent.
-// Adjustable by editing this constant or rebuilding the container image.
-const MONTHLY_TOKEN_BUDGET = 500_000;
-
-/**
- * Append this run's token usage to the group's monthly usage file.
- * File: /workspace/group/.usage/YYYY-MM.json (agent-readable)
- * Also logs a warning if the monthly budget is exceeded.
- */
-function updateMonthlyUsage(usage: RunUsage, model: string): void {
-  if (usage.input_tokens === 0 && usage.output_tokens === 0) return;
-
-  const month = new Date().toISOString().slice(0, 7); // "2026-03"
-  const usageDir = '/workspace/group/.usage';
-  const usageFile = path.join(usageDir, `${month}.json`);
-
-  let existing: MonthlyUsage = {
-    month, input_tokens: 0, output_tokens: 0,
-    cache_read_input_tokens: 0, cache_creation_input_tokens: 0,
-    runs: 0, last_updated: '',
-  };
-
-  try {
-    fs.mkdirSync(usageDir, { recursive: true });
-    if (fs.existsSync(usageFile)) {
-      existing = JSON.parse(fs.readFileSync(usageFile, 'utf-8'));
-    }
-  } catch { /* ignore read errors, start fresh */ }
-
-  existing.input_tokens += usage.input_tokens;
-  existing.output_tokens += usage.output_tokens;
-  existing.cache_read_input_tokens += usage.cache_read_input_tokens;
-  existing.cache_creation_input_tokens += usage.cache_creation_input_tokens;
-  existing.runs += 1;
-  existing.last_updated = new Date().toISOString();
-
-  const monthlyTotal = existing.input_tokens + existing.output_tokens;
-  if (monthlyTotal > MONTHLY_TOKEN_BUDGET) {
-    log(`WARNING: Monthly token budget exceeded: ${monthlyTotal.toLocaleString()} tokens used (budget: ${MONTHLY_TOKEN_BUDGET.toLocaleString()})`);
-  }
-
-  try {
-    // Also write a human-readable summary for the agent
-    const summary = {
-      ...existing,
-      model,
-      monthly_total_tokens: monthlyTotal,
-      budget: MONTHLY_TOKEN_BUDGET,
-      budget_used_pct: Math.round((monthlyTotal / MONTHLY_TOKEN_BUDGET) * 100),
-    };
-    fs.writeFileSync(usageFile, JSON.stringify(summary, null, 2));
-    log(`Usage written: ${usage.input_tokens}in/${usage.output_tokens}out this run | ${existing.input_tokens}in/${existing.output_tokens}out month total (${existing.runs} runs)`);
-  } catch (err) {
-    log(`Failed to write usage file: ${err instanceof Error ? err.message : String(err)}`);
-  }
+  log(`Query done. Messages: ${messageCount}, results: ${resultCount}, lastAssistantUuid: ${lastAssistantUuid || 'none'}, closedDuringQuery: ${closedDuringQuery}`);
+  return { newSessionId, lastAssistantUuid, closedDuringQuery };
 }
 
 async function main(): Promise<void> {
@@ -733,14 +515,6 @@ async function main(): Promise<void> {
     sdkEnv[key] = value;
   }
 
-  // Set default model — claude-sonnet-4-6 for cost/quality balance.
-  // Override via containerInput.model (host passes from config) or ANTHROPIC_MODEL env.
-  // Agent can also switch mid-conversation using Claude Code's /model command.
-  if (!sdkEnv.ANTHROPIC_MODEL) {
-    sdkEnv.ANTHROPIC_MODEL = containerInput.model || 'claude-sonnet-4-6';
-  }
-  log(`Model: ${sdkEnv.ANTHROPIC_MODEL}`);
-
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const mcpServerPath = path.join(__dirname, 'ipc-mcp-stdio.js');
 
@@ -763,7 +537,6 @@ async function main(): Promise<void> {
 
   // Query loop: run query → wait for IPC message → run new query → repeat
   let resumeAt: string | undefined;
-  const sessionUsage: RunUsage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
   try {
     while (true) {
       log(`Starting query (session: ${sessionId || 'new'}, resumeAt: ${resumeAt || 'latest'})...`);
@@ -775,16 +548,6 @@ async function main(): Promise<void> {
       if (queryResult.lastAssistantUuid) {
         resumeAt = queryResult.lastAssistantUuid;
       }
-
-      // Accumulate token usage across all turns in this container session
-      sessionUsage.input_tokens += queryResult.usage.input_tokens;
-      sessionUsage.output_tokens += queryResult.usage.output_tokens;
-      sessionUsage.cache_read_input_tokens += queryResult.usage.cache_read_input_tokens;
-      sessionUsage.cache_creation_input_tokens += queryResult.usage.cache_creation_input_tokens;
-
-      // Write usage after every query turn so data is persisted even if the
-      // container is killed by SIGKILL (timeout) before the loop exits cleanly.
-      updateMonthlyUsage(queryResult.usage, sdkEnv.ANTHROPIC_MODEL || 'claude-sonnet-4-6');
 
       // If _close was consumed during the query, exit immediately.
       // Don't emit a session-update marker (it would reset the host's
@@ -809,8 +572,6 @@ async function main(): Promise<void> {
       log(`Got new message (${nextMessage.length} chars), starting new query`);
       prompt = nextMessage;
     }
-    // Write cumulative usage for this container session to the monthly file
-    updateMonthlyUsage(sessionUsage, sdkEnv.ANTHROPIC_MODEL || 'claude-sonnet-4-6');
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     log(`Agent error: ${errorMessage}`);

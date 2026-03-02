@@ -12,14 +12,17 @@ import {
   TRIGGER_PATTERN,
 } from './config.js';
 import { SlackChannel } from './channels/slack.js';
+import { startApiServer } from './api.js';
 import {
   ContainerOutput,
   runContainerAgent,
   writeGroupsSnapshot,
   writeTasksSnapshot,
 } from './container-runner.js';
-import { cleanupOrphans, ensureContainerRuntimeRunning } from './container-runtime.js';
-import { readEnvFile } from './env.js';
+import {
+  cleanupOrphans,
+  ensureContainerRuntimeRunning,
+} from './container-runtime.js';
 import {
   getAllChats,
   getAllRegisteredGroups,
@@ -40,7 +43,6 @@ import { GroupQueue } from './group-queue.js';
 import { resolveGroupFolderPath } from './group-folder.js';
 import { startIpcWatcher } from './ipc.js';
 import { findChannel, formatMessages, formatOutbound } from './router.js';
-import { startApiServer } from './api.js';
 import { startSchedulerLoop } from './task-scheduler.js';
 import { Channel, NewMessage, RegisteredGroup } from './types.js';
 import { logger } from './logger.js';
@@ -54,9 +56,23 @@ let registeredGroups: Record<string, RegisteredGroup> = {};
 let lastAgentTimestamp: Record<string, string> = {};
 let messageLoopRunning = false;
 
-let slack: SlackChannel;
 const channels: Channel[] = [];
 const queue = new GroupQueue();
+
+// Model prefix patterns — user can prefix a message to upgrade the model for that run.
+const MODEL_PREFIX_OPUS   = /^opus:\s*/i;
+const MODEL_PREFIX_SONNET = /^sonnet:\s*/i;
+
+/**
+ * Resolve which model to use based on the latest message content.
+ * Returns the requested model string, or MODEL_DEFAULT if no prefix found.
+ */
+function resolveModel(messages: { content: string }[]): string {
+  const latest = messages[messages.length - 1]?.content ?? '';
+  if (MODEL_PREFIX_OPUS.test(latest))   return MODEL_COMPLEX;
+  if (MODEL_PREFIX_SONNET.test(latest)) return MODEL_SONNET;
+  return MODEL_DEFAULT;
+}
 
 function loadState(): void {
   lastTimestamp = getRouterState('last_timestamp') || '';
@@ -77,10 +93,7 @@ function loadState(): void {
 
 function saveState(): void {
   setRouterState('last_timestamp', lastTimestamp);
-  setRouterState(
-    'last_agent_timestamp',
-    JSON.stringify(lastAgentTimestamp),
-  );
+  setRouterState('last_agent_timestamp', JSON.stringify(lastAgentTimestamp));
 }
 
 function registerGroup(jid: string, group: RegisteredGroup): void {
@@ -126,22 +139,10 @@ export function getAvailableGroups(): import('./container-runner.js').AvailableG
 }
 
 /** @internal - exported for testing */
-export function _setRegisteredGroups(groups: Record<string, RegisteredGroup>): void {
+export function _setRegisteredGroups(
+  groups: Record<string, RegisteredGroup>,
+): void {
   registeredGroups = groups;
-}
-
-const MODEL_PREFIX_SONNET = /^sonnet:\s*/i;
-const MODEL_PREFIX_OPUS   = /^opus:\s*/i;
-
-/**
- * Check the most-recent user message for a model-upgrade prefix.
- * Returns the requested model string, or MODEL_DEFAULT if no prefix found.
- */
-function resolveModel(messages: { content: string }[]): string {
-  const latest = messages[messages.length - 1]?.content || '';
-  if (MODEL_PREFIX_OPUS.test(latest))   return MODEL_COMPLEX;
-  if (MODEL_PREFIX_SONNET.test(latest)) return MODEL_SONNET;
-  return MODEL_DEFAULT;
 }
 
 /**
@@ -154,14 +155,18 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
 
   const channel = findChannel(channels, chatJid);
   if (!channel) {
-    console.log(`Warning: no channel owns JID ${chatJid}, skipping messages`);
+    logger.warn({ chatJid }, 'No channel owns JID, skipping messages');
     return true;
   }
 
   const isMainGroup = group.folder === MAIN_GROUP_FOLDER;
 
   const sinceTimestamp = lastAgentTimestamp[chatJid] || '';
-  const missedMessages = getMessagesSince(chatJid, sinceTimestamp, ASSISTANT_NAME);
+  const missedMessages = getMessagesSince(
+    chatJid,
+    sinceTimestamp,
+    ASSISTANT_NAME,
+  );
 
   if (missedMessages.length === 0) return true;
 
@@ -173,8 +178,8 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     if (!hasTrigger) return true;
   }
 
-  const model = resolveModel(missedMessages);
   const prompt = formatMessages(missedMessages);
+  const model = resolveModel(missedMessages);
 
   // Advance cursor so the piping path in startMessageLoop won't re-fetch
   // these messages. Save the old cursor so we can roll back on error.
@@ -184,7 +189,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   saveState();
 
   logger.info(
-    { group: group.name, messageCount: missedMessages.length },
+    { group: group.name, messageCount: missedMessages.length, model },
     'Processing messages',
   );
 
@@ -194,7 +199,10 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   const resetIdleTimer = () => {
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
-      logger.debug({ group: group.name }, 'Idle timeout, closing container stdin');
+      logger.debug(
+        { group: group.name },
+        'Idle timeout, closing container stdin',
+      );
       queue.closeStdin(chatJid);
     }, IDLE_TIMEOUT);
   };
@@ -206,25 +214,27 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   const output = await runAgent(group, prompt, chatJid, model, async (result) => {
     // Streaming output callback — called for each agent result
     if (result.result) {
-      const raw = typeof result.result === 'string' ? result.result : JSON.stringify(result.result);
+      const raw =
+        typeof result.result === 'string'
+          ? result.result
+          : JSON.stringify(result.result);
       // Strip <internal>...</internal> blocks — agent uses these for internal reasoning
       const text = raw.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
       logger.info({ group: group.name }, `Agent output: ${raw.slice(0, 200)}`);
       if (text) {
         await channel.sendMessage(chatJid, text);
-        outputSentToUser = true;
-        // Store bot response so it appears in message history and the UI dashboard
+        // Store bot response in DB for the audit log / UI
         storeMessageDirect({
-          id: `bot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id: `bot-${Date.now()}-${Math.random().toString(36).slice(2)}`,
           chat_jid: chatJid,
-          sender: 'bot',
+          sender: ASSISTANT_NAME,
           sender_name: ASSISTANT_NAME,
           content: text,
           timestamp: new Date().toISOString(),
           is_from_me: true,
           is_bot_message: true,
-          model,
         });
+        outputSentToUser = true;
       }
       // Only reset idle timer on actual results, not session-update markers (result: null)
       resetIdleTimer();
@@ -246,13 +256,19 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     // If we already sent output to the user, don't roll back the cursor —
     // the user got their response and re-processing would send duplicates.
     if (outputSentToUser) {
-      logger.warn({ group: group.name }, 'Agent error after output was sent, skipping cursor rollback to prevent duplicates');
+      logger.warn(
+        { group: group.name },
+        'Agent error after output was sent, skipping cursor rollback to prevent duplicates',
+      );
       return true;
     }
     // Roll back cursor so retries can re-process these messages
     lastAgentTimestamp[chatJid] = previousCursor;
     saveState();
-    logger.warn({ group: group.name }, 'Agent error, rolled back message cursor for retry');
+    logger.warn(
+      { group: group.name },
+      'Agent error, rolled back message cursor for retry',
+    );
     return false;
   }
 
@@ -317,7 +333,8 @@ async function runAgent(
         assistantName: ASSISTANT_NAME,
         model,
       },
-      (proc, containerName) => queue.registerProcess(chatJid, proc, containerName, group.folder),
+      (proc, containerName) =>
+        queue.registerProcess(chatJid, proc, containerName, group.folder),
       wrappedOnOutput,
     );
 
@@ -353,7 +370,11 @@ async function startMessageLoop(): Promise<void> {
   while (true) {
     try {
       const jids = Object.keys(registeredGroups);
-      const { messages, newTimestamp } = getNewMessages(jids, lastTimestamp, ASSISTANT_NAME);
+      const { messages, newTimestamp } = getNewMessages(
+        jids,
+        lastTimestamp,
+        ASSISTANT_NAME,
+      );
 
       if (messages.length > 0) {
         logger.info({ count: messages.length }, 'New messages');
@@ -379,7 +400,7 @@ async function startMessageLoop(): Promise<void> {
 
           const channel = findChannel(channels, chatJid);
           if (!channel) {
-            console.log(`Warning: no channel owns JID ${chatJid}, skipping messages`);
+            logger.warn({ chatJid }, 'No channel owns JID, skipping messages');
             continue;
           }
 
@@ -416,9 +437,11 @@ async function startMessageLoop(): Promise<void> {
               messagesToSend[messagesToSend.length - 1].timestamp;
             saveState();
             // Show typing indicator while the container processes the piped message
-            channel.setTyping?.(chatJid, true)?.catch((err) =>
-              logger.warn({ chatJid, err }, 'Failed to set typing indicator'),
-            );
+            channel
+              .setTyping?.(chatJid, true)
+              ?.catch((err) =>
+                logger.warn({ chatJid, err }, 'Failed to set typing indicator'),
+              );
           } else {
             // No active container — enqueue for a new one
             queue.enqueueMessageCheck(chatJid);
@@ -471,42 +494,37 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
 
+  // Start web dashboard API
+  startApiServer();
+
+  // Read Slack tokens — prefer DEV_ tokens when present (M1 dev machine)
+  const { readEnvFile } = await import('./env.js');
+  const envVars = readEnvFile([
+    'DEV_SLACK_BOT_TOKEN', 'DEV_SLACK_APP_TOKEN',
+    'SLACK_BOT_TOKEN', 'SLACK_APP_TOKEN',
+  ]);
+  const botToken = process.env.DEV_SLACK_BOT_TOKEN || envVars.DEV_SLACK_BOT_TOKEN
+    || process.env.SLACK_BOT_TOKEN || envVars.SLACK_BOT_TOKEN || '';
+  const appToken = process.env.DEV_SLACK_APP_TOKEN || envVars.DEV_SLACK_APP_TOKEN
+    || process.env.SLACK_APP_TOKEN || envVars.SLACK_APP_TOKEN || '';
+
   // Channel callbacks (shared by all channels)
   const channelOpts = {
     onMessage: (_chatJid: string, msg: NewMessage) => storeMessage(msg),
-    onChatMetadata: (chatJid: string, timestamp: string, name?: string, channel?: string, isGroup?: boolean) =>
-      storeChatMetadata(chatJid, timestamp, name, channel, isGroup),
+    onChatMetadata: (
+      chatJid: string,
+      timestamp: string,
+      name?: string,
+      channel?: string,
+      isGroup?: boolean,
+    ) => storeChatMetadata(chatJid, timestamp, name, channel, isGroup),
     registeredGroups: () => registeredGroups,
+    botToken,
+    appToken,
   };
 
-  // Load Slack tokens
-  // Slack requires TWO tokens: Bot Token (xoxb-) and App Token (xapp-) for Socket Mode
-  // DEV_SLACK_BOT_TOKEN for development (M1), SLACK_BOT_TOKEN for production (Intel)
-  const slackEnv = readEnvFile([
-    'DEV_SLACK_BOT_TOKEN',
-    'DEV_SLACK_APP_TOKEN',
-    'SLACK_BOT_TOKEN',
-    'SLACK_APP_TOKEN',
-  ]);
-  const slackBotToken = process.env.DEV_SLACK_BOT_TOKEN || slackEnv.DEV_SLACK_BOT_TOKEN ||
-                        process.env.SLACK_BOT_TOKEN || slackEnv.SLACK_BOT_TOKEN;
-  const slackAppToken = process.env.DEV_SLACK_APP_TOKEN || slackEnv.DEV_SLACK_APP_TOKEN ||
-                        process.env.SLACK_APP_TOKEN || slackEnv.SLACK_APP_TOKEN;
-
-  if (!slackBotToken || !slackAppToken) {
-    logger.error('Both SLACK_BOT_TOKEN and SLACK_APP_TOKEN environment variables are required');
-    logger.error('(Or DEV_SLACK_BOT_TOKEN and DEV_SLACK_APP_TOKEN for development)');
-    logger.error('Please set up your Slack app tokens in .env file');
-    logger.error('See SLACK_SETUP.md for instructions');
-    process.exit(1);
-  }
-
   // Create and connect channels
-  slack = new SlackChannel({
-    ...channelOpts,
-    botToken: slackBotToken,
-    appToken: slackAppToken
-  });
+  const slack = new SlackChannel(channelOpts);
   channels.push(slack);
   await slack.connect();
 
@@ -515,11 +533,12 @@ async function main(): Promise<void> {
     registeredGroups: () => registeredGroups,
     getSessions: () => sessions,
     queue,
-    onProcess: (groupJid, proc, containerName, groupFolder) => queue.registerProcess(groupJid, proc, containerName, groupFolder),
+    onProcess: (groupJid, proc, containerName, groupFolder) =>
+      queue.registerProcess(groupJid, proc, containerName, groupFolder),
     sendMessage: async (jid, rawText) => {
       const channel = findChannel(channels, jid);
       if (!channel) {
-        console.log(`Warning: no channel owns JID ${jid}, cannot send message`);
+        logger.warn({ jid }, 'No channel owns JID, cannot send message');
         return;
       }
       const text = formatOutbound(rawText);
@@ -534,12 +553,12 @@ async function main(): Promise<void> {
     },
     registeredGroups: () => registeredGroups,
     registerGroup,
-    syncGroupMetadata: (force) => Promise.resolve(), // Slack provides names inline, no separate sync needed
+    syncGroupMetadata: () => Promise.resolve(),
     getAvailableGroups,
-    writeGroupsSnapshot: (gf, im, ag, rj) => writeGroupsSnapshot(gf, im, ag, rj),
+    writeGroupsSnapshot: (gf, im, ag, rj) =>
+      writeGroupsSnapshot(gf, im, ag, rj),
   });
   queue.setProcessMessagesFn(processGroupMessages);
-  startApiServer();
   recoverPendingMessages();
   startMessageLoop().catch((err) => {
     logger.fatal({ err }, 'Message loop crashed unexpectedly');
@@ -550,7 +569,8 @@ async function main(): Promise<void> {
 // Guard: only run when executed directly, not when imported by tests
 const isDirectRun =
   process.argv[1] &&
-  new URL(import.meta.url).pathname === new URL(`file://${process.argv[1]}`).pathname;
+  new URL(import.meta.url).pathname ===
+    new URL(`file://${process.argv[1]}`).pathname;
 
 if (isDirectRun) {
   main().catch((err) => {
