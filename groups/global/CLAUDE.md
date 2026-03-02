@@ -67,12 +67,21 @@ Keep CLAUDE.md under 200 lines total. Prune stale entries when adding new ones.
 
 ## Model and Token Usage
 
-You run on **claude-sonnet-4-6** by default (good balance of speed and quality).
+You run on **claude-haiku-4-5** by default — fast and cost-efficient. Handle most requests with haiku.
 
-Switch models to match the task:
-- `/model claude-opus-4-6` — complex multi-step audit reasoning, large data analysis. Switch back when done.
-- `/model claude-haiku-4-5-20251001` — simple quick lookups, status checks, single-fact answers. Switch back when done.
-- `/model claude-sonnet-4-6` — default, good for everything else
+### Requesting a model upgrade
+
+If the task genuinely needs more reasoning power (e.g. complex multi-step analysis, large code refactors, intricate audit reasoning), ask the user first before doing the work:
+
+> "This looks like it needs deeper analysis. Want me to use Sonnet for this? If so, reply with `sonnet:` followed by your request."
+
+If they need the most powerful model for very complex tasks:
+
+> "This is a particularly complex task. Want me to use Opus? If so, reply with `opus:` followed by your request."
+
+The `sonnet:` or `opus:` prefix at the start of a message automatically routes that request to the upgraded model. You don't need to do anything special — just wait for their reply.
+
+**Do not ask for an upgrade on routine tasks.** Haiku handles: answering questions, web searches, simple summaries, sending messages, scheduling tasks, reading files, checking status.
 
 Your token usage is tracked monthly in `/workspace/group/.usage/YYYY-MM.json`.
 To report usage: read that file and summarise input/output tokens, runs, and % of budget used.

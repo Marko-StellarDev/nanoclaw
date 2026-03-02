@@ -5,7 +5,9 @@ import {
   ASSISTANT_NAME,
   IDLE_TIMEOUT,
   MAIN_GROUP_FOLDER,
+  MODEL_COMPLEX,
   MODEL_DEFAULT,
+  MODEL_SONNET,
   POLL_INTERVAL,
   TRIGGER_PATTERN,
 } from './config.js';
@@ -128,6 +130,20 @@ export function _setRegisteredGroups(groups: Record<string, RegisteredGroup>): v
   registeredGroups = groups;
 }
 
+const MODEL_PREFIX_SONNET = /^sonnet:\s*/i;
+const MODEL_PREFIX_OPUS   = /^opus:\s*/i;
+
+/**
+ * Check the most-recent user message for a model-upgrade prefix.
+ * Returns the requested model string, or MODEL_DEFAULT if no prefix found.
+ */
+function resolveModel(messages: { content: string }[]): string {
+  const latest = messages[messages.length - 1]?.content || '';
+  if (MODEL_PREFIX_OPUS.test(latest))   return MODEL_COMPLEX;
+  if (MODEL_PREFIX_SONNET.test(latest)) return MODEL_SONNET;
+  return MODEL_DEFAULT;
+}
+
 /**
  * Process all pending messages for a group.
  * Called by the GroupQueue when it's this group's turn.
@@ -157,6 +173,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     if (!hasTrigger) return true;
   }
 
+  const model = resolveModel(missedMessages);
   const prompt = formatMessages(missedMessages);
 
   // Advance cursor so the piping path in startMessageLoop won't re-fetch
@@ -186,7 +203,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   let hadError = false;
   let outputSentToUser = false;
 
-  const output = await runAgent(group, prompt, chatJid, async (result) => {
+  const output = await runAgent(group, prompt, chatJid, model, async (result) => {
     // Streaming output callback — called for each agent result
     if (result.result) {
       const raw = typeof result.result === 'string' ? result.result : JSON.stringify(result.result);
@@ -206,7 +223,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
           timestamp: new Date().toISOString(),
           is_from_me: true,
           is_bot_message: true,
-          model: MODEL_DEFAULT,
+          model,
         });
       }
       // Only reset idle timer on actual results, not session-update markers (result: null)
@@ -246,6 +263,7 @@ async function runAgent(
   group: RegisteredGroup,
   prompt: string,
   chatJid: string,
+  model: string,
   onOutput?: (output: ContainerOutput) => Promise<void>,
 ): Promise<'success' | 'error'> {
   const isMain = group.folder === MAIN_GROUP_FOLDER;
@@ -297,6 +315,7 @@ async function runAgent(
         chatJid,
         isMain,
         assistantName: ASSISTANT_NAME,
+        model,
       },
       (proc, containerName) => queue.registerProcess(chatJid, proc, containerName, group.folder),
       wrappedOnOutput,

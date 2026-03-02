@@ -69,12 +69,14 @@ export const TIMEZONE =
   process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 // Model selection — passed to container via ContainerInput.model
-// claude-sonnet-4-6: default for most tasks (best cost/quality balance)
-// claude-opus-4-6:   complex multi-step audit reasoning, explicit user request only
-// claude-haiku-4-5-20251001: simple quick lookups, status checks
-export const MODEL_DEFAULT = process.env.DEFAULT_MODEL || 'claude-sonnet-4-6';
+// Haiku is the default — fast and cheap, handles most tasks.
+// Agent can ask the user to resend with a prefix to upgrade:
+//   sonnet: <message>  → claude-sonnet-4-6
+//   opus:   <message>  → claude-opus-4-6
+export const MODEL_DEFAULT = process.env.DEFAULT_MODEL || 'claude-haiku-4-5-20251001';
+export const MODEL_SONNET  = 'claude-sonnet-4-6';
 export const MODEL_COMPLEX = 'claude-opus-4-6';
-export const MODEL_FAST    = 'claude-haiku-4-5-20251001';
+export const MODEL_FAST    = 'claude-haiku-4-5-20251001'; // same as default, kept for reference
 
 // Soft monthly token budget per group (warns in logs if exceeded, does not hard-block)
 export const MONTHLY_TOKEN_BUDGET = parseInt(
