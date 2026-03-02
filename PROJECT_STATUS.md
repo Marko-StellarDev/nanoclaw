@@ -1,6 +1,6 @@
 # NanoClaw Project Status
 
-**Last Updated:** 2026-03-02 (Session 5 Complete)
+**Last Updated:** 2026-03-02 (Session 5+6 Complete)
 **Session Recovery Document** - Read this first when reopening terminal
 
 ---
@@ -306,6 +306,7 @@ npm install && npm run build
 - Task controls: pause/resume/cancel buttons on every task row
 - Task creation form: "+ New Task" with group, schedule type/value, context mode, prompt
 - New API endpoints: GET /api/status, POST /api/groups/:folder/message, POST/DELETE /api/tasks/*
+- Humanised schedule display: cron/ms → plain English ("Weekdays at 9 AM", "Every 4 hr", etc.)
 
 ---
 
