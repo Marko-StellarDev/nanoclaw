@@ -1,6 +1,6 @@
 # NanoClaw Codebase Index
 
-**Last Updated:** 2026-03-01 (Migrated to Slack)
+**Last Updated:** 2026-03-02 (Session 4 — Audit log, activity hook, security hardening)
 **Total Size:** ~35k tokens (17% of 200k context)
 
 **⚠️ SESSION RECOVERY:** If terminal closes, read `PROJECT_STATUS.md` first - contains todo list, completed work, and next steps
@@ -149,7 +149,7 @@ Container (per group)
 
 ### Database & State
 
-**`src/db.ts` (664 lines)**
+**`src/db.ts` (670 lines)**
 - SQLite via better-sqlite3
 - **Location:** `store/messages.db`
 - **Schema:**
@@ -162,11 +162,13 @@ Container (per group)
   - `registered_groups` - Group configs
 - **Key Functions:**
   - `initDatabase()` - Schema creation, migrations
-  - `storeMessage()` / `getNewMessages()` - Message CRUD
+  - `storeMessage()` / `storeMessageDirect()` / `getNewMessages()` - Message CRUD
   - `getAllChats()` - Group discovery (ordered by activity)
   - Task CRUD: `createTask()`, `updateTask()`, `deleteTask()`, `getDueTasks()`
   - Session: `getSession()`, `saveSession()`
   - Groups: `getAllRegisteredGroups()`, `registerGroup()`
+  - Audit: `getAuditEvents(limit, folder?)` - UNION of messages + task_run_logs, newest-first
+  - `AuditEvent` interface: `type: 'user' | 'bot' | 'task' | 'activity'`, `tool?: string`
 
 ### Channels
 
@@ -305,16 +307,17 @@ Container (per group)
 
 ### Web Dashboard
 
-**`src/api.ts` (~165 lines)**
+**`src/api.ts` (~210 lines)**
 - Lightweight REST API using Node built-in `http` (zero new deps)
 - **Port:** `3001` (override with `API_PORT`); binds to `127.0.0.1` by default (set `API_HOST=0.0.0.0` for LAN access)
-- **Endpoints:** `/api/health`, `/api/groups`, `/api/groups/:folder/messages`, `/api/groups/:folder/usage`, `/api/groups/:folder/tasks`, `/api/tasks`
+- **Endpoints:** `/api/health`, `/api/groups`, `/api/groups/:folder/messages`, `/api/groups/:folder/usage`, `/api/groups/:folder/tasks`, `/api/tasks`, `/api/audit`
 - **Security:** CORS restricted to localhost:4200 (wildcard when `API_HOST=0.0.0.0`); folder param validated via `isValidGroupFolder()`; month param validated against `YYYY-MM` pattern
+- `readActivityEvents(folder?)` — reads `groups/{folder}/.activity.jsonl`, last 500 lines, merged with DB audit events
 - Started from `src/index.ts` `main()` before message loop
 
 **`ui/`**
 - Angular 17 standalone app, served on `:4200` (`cd ui && npm start`)
-- Pages: Dashboard (all groups), KEB Ops (branch network, usage, tasks), Tasks (all scheduled tasks)
+- Pages: Dashboard (all groups), KEB Ops (branch network, usage, tasks), Tasks (all scheduled tasks), **Audit Log** (messages + task runs + tool activity, live 5s refresh)
 - Proxies `/api` to `:3001` via `proxy.conf.json` — **must use `npm start`**, not `npx ng serve`
 
 ### Utilities
@@ -345,7 +348,7 @@ Container (per group)
 
 ### Agent Runner
 
-**`container/agent-runner/src/index.ts` (589 lines)**
+**`container/agent-runner/src/index.ts` (~650 lines)**
 - Container-side agent executor
 - **Input:** Stdin JSON (`ContainerInput`) with prompt, sessionId, secrets
 - **Output:** Sentinel-wrapped JSON for streaming
@@ -358,9 +361,12 @@ Container (per group)
   6. Repeat until `_close`
 - **Hooks:**
   - `PreCompact` - Archive transcript to `conversations/`
-  - `PreToolUse (Bash)` - Strip secrets from subprocess env
+  - `PreToolUse (Bash matcher)` - Strip secrets from subprocess env
+  - `PreToolUse (all tools)` - `createActivityLogHook()` appends JSONL to `/workspace/group/.activity.jsonl`
+- **Activity Log:** `describeToolUse()` maps each tool + input to a human-readable string (e.g. "Searching web: Dubai weather", "Fetching: https://...")
 - **Session:** Tracks `newSessionId`, `lastAssistantUuid`
 - **Global Memory:** Loads `/workspace/global/CLAUDE.md` for non-main
+- **Usage:** Written after every query turn (not just on clean exit — survives SIGKILL)
 
 **`container/agent-runner/src/ipc-mcp-stdio.ts` (286 lines)**
 - Stdio MCP server for NanoClaw tools
@@ -414,6 +420,12 @@ Container (per group)
 
 **Conversation Archives:**
 - `groups/{folder}/conversations/` - PreCompact hook saves transcripts
+
+**Activity Log:**
+- `groups/{folder}/.activity.jsonl` - Append-only JSONL; one entry per tool call `{ts, tool, description}`
+- Written by `createActivityLogHook()` inside the container on every tool invocation
+- Read by `src/api.ts` `readActivityEvents()` and merged into `/api/audit` response
+- Capped to last 500 lines when reading (unbounded write, bounded read)
 
 **SOUL.md Loading:**
 - Loaded by `container/agent-runner/src/index.ts` at startup

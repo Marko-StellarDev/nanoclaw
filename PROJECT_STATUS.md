@@ -1,6 +1,6 @@
 # NanoClaw Project Status
 
-**Last Updated:** 2026-03-02 (Session 3 Complete)
+**Last Updated:** 2026-03-02 (Session 4 Complete)
 **Session Recovery Document** - Read this first when reopening terminal
 
 ---
@@ -10,11 +10,11 @@
 **StellarBot is fully operational.**
 
 ### What's Running
-- Slack bot live via Socket Mode (`@StellarBot`)
+- Slack bot live via Socket Mode — **no @mention required**, responds to all messages
 - `#testing` registered as `keb-ops` group — KEB Ops SOUL.md active
 - Main DM (`slack:D0AHNS5EP2P`) registered as `main` group
 - REST API on `:3001` — live and responding
-- Angular UI on `:4200` — dashboard, KEB Ops, Tasks pages
+- Angular UI on `:4200` — Dashboard, KEB Ops, Tasks, **Audit Log** pages
 
 ### When You Open Terminal Next Time
 1. Check if bot is still running: `ps aux | grep "src/index.ts"`
@@ -90,6 +90,44 @@
 
 ---
 
+## SESSION 4 ADDITIONS ✅ (2026-03-02)
+
+### Security Audit
+- ✅ Path traversal fixed: `isValidGroupFolder()` validation on `:folder` URL param
+- ✅ Month param validated against `YYYY-MM` pattern
+- ✅ CORS changed from `*` to `http://localhost:4200` (wildcard when `API_HOST=0.0.0.0`)
+- ✅ API bind changed from `0.0.0.0` to `127.0.0.1` (LAN access via `API_HOST` env var)
+
+### INITIAL_PROMPT Gap Fixes
+- ✅ Added Telegram swap comments to `src/channels/slack.ts`
+- ✅ Added haiku model option to `groups/global/CLAUDE.md`
+- ✅ Fixed `CODEBASE_INDEX.md` stale references (WhatsApp flow, whatsapp-auth.ts)
+- ✅ Added `API_HOST` env var to `.env.example` with security note
+
+### UI Fixes
+- ✅ Bot responses stored in DB: `storeMessageDirect()` called after `channel.sendMessage()`
+- ✅ Usage tracking: `updateMonthlyUsage()` moved inside query loop (survives SIGKILL)
+- ✅ Container rebuilt and session copies updated
+
+### Remove @mention Requirement
+- ✅ `src/channels/slack.ts`: `message` event processes ALL messages (not just DMs)
+- ✅ Dedup Set `recentMentionTs` prevents double-processing @mentions (10s auto-expire)
+- ✅ DB: both groups set to `requires_trigger = 0`
+
+### Audit Log UI
+- ✅ `src/db.ts`: `AuditEvent` interface + `getAuditEvents(limit, folder?)` — SQL UNION of messages + task_run_logs
+- ✅ `src/api.ts`: `/api/audit?limit=N&group=folder` endpoint
+- ✅ `ui/.../audit/audit.component.ts`: chronological table, group filter, 5s live refresh, row tints, type badges
+- ✅ `/audit` route + sidebar link added
+
+### Activity Log (Tool-Use Visibility)
+- ✅ `container/agent-runner/src/index.ts`: `createActivityLogHook()` — fires for every tool call, appends JSONL to `groups/{folder}/.activity.jsonl`
+- ✅ `describeToolUse()` generates human-readable descriptions: "Searching web: Dubai weather", "Fetching: https://..."
+- ✅ `src/api.ts`: `readActivityEvents()` reads `.activity.jsonl`, merges with DB events in `/api/audit`
+- ✅ Audit UI: activity rows show muted/italic with tool emoji + tool name badge
+
+---
+
 ## FILE STRUCTURE
 
 ```
@@ -123,7 +161,8 @@ nanoclaw/
 │   │   └── pages/
 │   │       ├── dashboard/    # All groups overview
 │   │       ├── keb/          # KEB Ops detail
-│   │       └── tasks/        # All scheduled tasks
+│   │       ├── tasks/        # All scheduled tasks
+│   │       └── audit/        # Audit log (messages + tasks + tool activity)
 ├── CODEBASE_INDEX.md         # Architecture reference
 ├── SLACK_SETUP.md            # Slack bot setup guide
 ├── INTEL_SETUP.md            # Production deployment guide
@@ -252,6 +291,14 @@ npm install && npm run build
 - Phase 5: REST API (src/api.ts) + Angular 17 UI (ui/) — dashboard live
 - Fixed port 3001 conflict (background vs terminal bot)
 - Fixed Angular proxy (must use `npm start` not `npx ng serve`)
+
+### Session 4 (2026-03-02)
+- Security audit: path traversal fix, CORS restrict, 127.0.0.1 bind, API_HOST opt-in
+- Gap analysis: Telegram swap comments, haiku in global CLAUDE.md, stale index fixes
+- UI: bot responses in DB, usage tracking fixed (moved inside query loop)
+- Removed @mention requirement: all messages processed, dedup for @mentions
+- Added Audit Log UI page with live auto-refresh
+- Added tool-use activity logging: .activity.jsonl hook + API merge + UI display
 
 ---
 
