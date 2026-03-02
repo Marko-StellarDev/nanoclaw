@@ -1,6 +1,6 @@
 # NanoClaw Project Status
 
-**Last Updated:** 2026-03-02 (Session 9: Sci-fi UI redesign complete)
+**Last Updated:** 2026-03-02 (Session 9: Sci-fi UI redesign + Analytics page complete)
 **Session Recovery Document** - Read this first when reopening terminal
 
 ---
@@ -14,7 +14,7 @@
 - `#testing` registered as `keb-ops` group — KEB Ops SOUL.md active
 - Main DM (`slack:D0AHNS5EP2P`) registered as `main` group
 - REST API on `:3001` — live and responding
-- Angular UI on `:4200` — Dashboard (chat input + live status), KEB Ops, Tasks (controls + create form), Audit Log
+- Angular UI on `:4200` — Dashboard (chat input + live status), KEB Ops, Tasks (controls + create form), Audit Log, Analytics (charts + model cost breakdown)
 
 ### When You Open Terminal Next Time
 1. Check if bot is still running: `ps aux | grep "src/index.ts"`

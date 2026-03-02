@@ -331,10 +331,14 @@ Container (per group)
 
 **`ui/`**
 - Angular 17 standalone app, served on `:4200` (`cd ui && npm start`)
-- **Dashboard** — group cards with live chat input (Enter to send), pulsing green dot + typing indicator when agent is thinking (polls `/api/status` every 5s), auto-refreshes messages
-- **KEB Ops** — branch network, token usage stats, tasks, message history
-- **Tasks** — task table with pause/resume/cancel buttons, `scheduleLabel()` converts cron/ms/once to plain English; "+ New Task" form with preset schedule dropdown (14 cron, 8 interval presets + datetime-local picker for once; "Custom…" reveals raw input)
-- **Audit Log** — messages + task runs + tool activity, live 5s refresh; bot + task rows show model tag (e.g. `sonnet-4.6`) in the type column
+- **Theme:** Sci-fi "Neural Interface" — void black (`#040d18`), electric cyan (`#00c8ff`), matrix green (`#00ff88`), purple (`#7b2fff`). Fonts: Rajdhani (headings/nav), JetBrains Mono (data). Canvas particle network background (70 nodes, animated connections) in `app.component.ts`. Glassmorphism cards with CSS corner-bracket `::before`/`::after` decorations.
+- **Style budget:** `anyComponentStyle` at 8kb warning / 16kb error (`angular.json`)
+- **`api.service.ts` — `MonthlyUsage` interface:** `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `runs`, `budget_used_pct`, `model?`
+- **Dashboard** (`// 01 SYSTEM STATUS`) — group cards with terminal-style message stream, chat input (Enter to send, Shift+Enter newline), pulsing green dot + wave animation when agent is thinking (polls `/api/status` every 5s), auto-refreshes messages
+- **KEB Ops** (`// 02 KEB OPS`) — node-indexed branches (N01..N07), segmented budget bar with 25/50/75% markers, token telemetry, tasks, message history
+- **Tasks** (`// 03 TASK SCHEDULER`) — task table with pause/resume/cancel buttons, `scheduleLabel()` converts cron/ms/once to plain English; "+ New Task" form with preset schedule dropdown (14 cron, 8 interval presets + datetime-local picker for once; "Custom…" reveals raw input)
+- **Audit Log** (`// 04 AUDIT STREAM`) — messages + task runs + tool activity, live 5s refresh; bot + task rows show model tag (e.g. `sonnet-4.6`) in the type column; tool rows use geometric glyphs (⚙ ◎ ◉ ▤ ▦ ▣ ◈)
+- **Analytics** (`// 05 ANALYTICS`) — `analytics.component.ts`; 4 stat cards (cost this month, total tokens, cache hit rate, avg cost/run); canvas bar chart (6-month cost trend, retina-aware `devicePixelRatio`, per-group colours, dollar labels, dashed current-month outline); CSS stacked token bars (input/output/cache-write/cache-read); model pricing reference table (haiku/sonnet/opus with active model badge); usage history table (all months × all groups, newest-first). Pricing: haiku $0.80/$4.00, sonnet $3.00/$15.00, opus $15.00/$75.00 per 1M tokens (input/output). `calcCost()` includes cache read/write tokens.
 - Proxies `/api` to `:3001` via `proxy.conf.json` — **must use `npm start`**, not `npx ng serve`
 
 ### Utilities
