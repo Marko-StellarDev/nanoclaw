@@ -5,6 +5,7 @@ import {
   ASSISTANT_NAME,
   IDLE_TIMEOUT,
   MAIN_GROUP_FOLDER,
+  MODEL_DEFAULT,
   POLL_INTERVAL,
   TRIGGER_PATTERN,
 } from './config.js';
@@ -205,6 +206,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
           timestamp: new Date().toISOString(),
           is_from_me: true,
           is_bot_message: true,
+          model: MODEL_DEFAULT,
         });
       }
       // Only reset idle timer on actual results, not session-update markers (result: null)

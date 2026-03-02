@@ -107,9 +107,20 @@ function createSchema(database: Database.Database): void {
   } catch {
     /* column already exists */
   }
-  // Backfill existing rows that predate this column
+  // Backfill existing task_run_logs rows that predate this column
   database.prepare(
     `UPDATE task_run_logs SET model = ? WHERE model IS NULL`,
+  ).run(MODEL_DEFAULT);
+
+  // Add model column to messages if it doesn't exist (migration for existing DBs)
+  try {
+    database.exec(`ALTER TABLE messages ADD COLUMN model TEXT`);
+  } catch {
+    /* column already exists */
+  }
+  // Backfill existing bot message rows
+  database.prepare(
+    `UPDATE messages SET model = ? WHERE model IS NULL AND is_bot_message = 1`,
   ).run(MODEL_DEFAULT);
 
   // Add channel and is_group columns if they don't exist (migration for existing DBs)
@@ -276,9 +287,10 @@ export function storeMessageDirect(msg: {
   timestamp: string;
   is_from_me: boolean;
   is_bot_message?: boolean;
+  model?: string;
 }): void {
   db.prepare(
-    `INSERT OR REPLACE INTO messages (id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR REPLACE INTO messages (id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message, model) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     msg.id,
     msg.chat_jid,
@@ -288,6 +300,7 @@ export function storeMessageDirect(msg: {
     msg.timestamp,
     msg.is_from_me ? 1 : 0,
     msg.is_bot_message ? 1 : 0,
+    msg.model ?? null,
   );
 }
 
@@ -403,7 +416,7 @@ export function getAuditEvents(limit = 100, folder?: string): AuditEvent[] {
       SUBSTR(m.content, 1, 100) AS summary,
       m.content AS detail,
       NULL AS status,
-      NULL AS model
+      m.model AS model
     FROM messages m
     JOIN registered_groups rg ON m.chat_jid = rg.jid
     WHERE 1=1 ${folderFilter}
