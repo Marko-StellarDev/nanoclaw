@@ -1,6 +1,6 @@
 # NanoClaw Project Status
 
-**Last Updated:** 2026-03-02 (Session 5+6+7 Complete)
+**Last Updated:** 2026-03-02 (Session 5+6+7+8 Complete, upstream v1.1.6 merged)
 **Session Recovery Document** - Read this first when reopening terminal
 
 ---
@@ -271,6 +271,16 @@ npm install && npm run build
 ---
 
 ## SESSIONS LOG
+
+### Upstream Merge v1.1.2 → v1.1.6 (2026-03-02)
+- Merged upstream NanoClaw v1.1.6 into local repo
+- Preserved all customizations: SlackChannel, api.ts, agent-status.ts, model routing
+- Key upstream additions: container/agent-runner improvements, ipc-mcp-stdio updates,
+  db.ts schema improvements, WhatsApp files re-added (upstream default), test suite expanded
+- Restored to db.ts: getRecentMessages(), getAuditEvents(), AuditEvent interface
+- Restored to config.ts: MODEL_DEFAULT/SONNET/COMPLEX/FAST, MONTHLY_TOKEN_BUDGET
+- Added model field to ContainerInput in container-runner.ts
+- Build: passing. 362/366 tests pass (4 fetch-upstream.sh are network-dependent, pre-existing)
 
 ### Session 1 (2026-03-01)
 - Created CODEBASE_INDEX.md, migrated WhatsApp → Slack

@@ -1,6 +1,6 @@
 # NanoClaw Codebase Index
 
-**Last Updated:** 2026-03-02 (Session 8 — Haiku default model, sonnet:/opus: prefix routing; prior: model column in audit log, schedule humaniser + dropdown, chat input, task controls, agent status)
+**Last Updated:** 2026-03-02 (Upstream v1.1.6 merged — container/agent-runner improvements, db schema updates, new WhatsApp files added; customizations preserved)
 **Total Size:** ~35k tokens (17% of 200k context)
 
 **⚠️ SESSION RECOVERY:** If terminal closes, read `PROJECT_STATUS.md` first - contains todo list, completed work, and next steps
@@ -102,7 +102,7 @@ Container (per group)
 
 ### Core Orchestration
 
-**`src/index.ts` (560 lines)**
+**`src/index.ts` (~590 lines)**
 - Main entry point and orchestrator
 - **State:**
   - `lastTimestamp` - Global message cursor
@@ -152,7 +152,7 @@ Container (per group)
 
 ### Database & State
 
-**`src/db.ts` (778 lines)**
+**`src/db.ts` (~900 lines)**
 - SQLite via better-sqlite3
 - **Location:** `store/messages.db`
 - **Schema:**
