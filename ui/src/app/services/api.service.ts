@@ -1,0 +1,86 @@
+import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+
+export interface Group {
+  jid: string;
+  name: string;
+  folder: string;
+  trigger: string;
+  added_at: string;
+  requiresTrigger: boolean;
+}
+
+export interface Message {
+  id: string;
+  chat_jid: string;
+  sender: string;
+  sender_name: string;
+  content: string;
+  timestamp: string;
+  is_from_me: number;
+  is_bot_message: number;
+}
+
+export interface MonthlyUsage {
+  month: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens: number;
+  cache_creation_input_tokens: number;
+  runs: number;
+  budget: number;
+  budget_used_pct: number;
+  last_updated: string;
+}
+
+export interface Task {
+  id: string;
+  group_folder: string;
+  chat_jid: string;
+  prompt: string;
+  schedule_type: 'cron' | 'interval' | 'once';
+  schedule_value: string;
+  context_mode: 'group' | 'isolated';
+  next_run: string | null;
+  last_run: string | null;
+  last_result: string | null;
+  status: 'active' | 'paused' | 'completed';
+  created_at: string;
+}
+
+export interface Health {
+  status: string;
+  uptime: number;
+  ts: string;
+}
+
+@Injectable({ providedIn: 'root' })
+export class ApiService {
+  private http = inject(HttpClient);
+
+  health(): Observable<Health> {
+    return this.http.get<Health>('/api/health');
+  }
+
+  groups(): Observable<Group[]> {
+    return this.http.get<Group[]>('/api/groups');
+  }
+
+  messages(folder: string, limit = 50): Observable<Message[]> {
+    return this.http.get<Message[]>(`/api/groups/${folder}/messages?limit=${limit}`);
+  }
+
+  usage(folder: string, month?: string): Observable<MonthlyUsage | MonthlyUsage[]> {
+    const q = month ? `?month=${month}` : '';
+    return this.http.get<MonthlyUsage | MonthlyUsage[]>(`/api/groups/${folder}/usage${q}`);
+  }
+
+  groupTasks(folder: string): Observable<Task[]> {
+    return this.http.get<Task[]>(`/api/groups/${folder}/tasks`);
+  }
+
+  allTasks(): Observable<Task[]> {
+    return this.http.get<Task[]>('/api/tasks');
+  }
+}

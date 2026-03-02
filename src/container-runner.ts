@@ -13,6 +13,7 @@ import {
   DATA_DIR,
   GROUPS_DIR,
   IDLE_TIMEOUT,
+  MODEL_DEFAULT,
   TIMEZONE,
 } from './config.js';
 import { readEnvFile } from './env.js';
@@ -34,6 +35,7 @@ export interface ContainerInput {
   isMain: boolean;
   isScheduledTask?: boolean;
   assistantName?: string;
+  model?: string;
   secrets?: Record<string, string>;
 }
 
@@ -268,6 +270,9 @@ export async function runContainerAgent(
     let stderr = '';
     let stdoutTruncated = false;
     let stderrTruncated = false;
+
+    // Set default model if caller didn't specify one
+    if (!input.model) input.model = MODEL_DEFAULT;
 
     // Pass secrets via stdin (never written to disk or mounted as files)
     input.secrets = readSecrets();

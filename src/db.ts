@@ -254,7 +254,7 @@ export function storeMessage(msg: NewMessage): void {
 }
 
 /**
- * Store a message directly (for non-WhatsApp channels that don't use Baileys proto).
+ * Store a message directly (for channels like Slack, Telegram, etc.).
  */
 export function storeMessageDirect(msg: {
   id: string;
@@ -329,6 +329,36 @@ export function getMessagesSince(
   return db
     .prepare(sql)
     .all(chatJid, sinceTimestamp, `${botPrefix}:%`) as NewMessage[];
+}
+
+export interface MessageRow {
+  id: string;
+  chat_jid: string;
+  sender: string;
+  sender_name: string;
+  content: string;
+  timestamp: string;
+  is_from_me: number;
+  is_bot_message: number;
+}
+
+/**
+ * Get the most recent N messages for a group, identified by folder name.
+ * Returns newest-first so the caller can reverse if needed.
+ */
+export function getRecentMessages(folder: string, limit = 50): MessageRow[] {
+  const group = db
+    .prepare(`SELECT jid FROM registered_groups WHERE folder = ?`)
+    .get(folder) as { jid: string } | undefined;
+  if (!group) return [];
+
+  return db
+    .prepare(
+      `SELECT id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message
+       FROM messages WHERE chat_jid = ?
+       ORDER BY timestamp DESC LIMIT ?`,
+    )
+    .all(group.jid, limit) as MessageRow[];
 }
 
 export function createTask(

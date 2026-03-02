@@ -12,7 +12,7 @@ const envConfig = readEnvFile([
 ]);
 
 export const ASSISTANT_NAME =
-  process.env.ASSISTANT_NAME || envConfig.ASSISTANT_NAME || 'Andy';
+  process.env.ASSISTANT_NAME || envConfig.ASSISTANT_NAME || 'StellarBot';
 export const ASSISTANT_HAS_OWN_NUMBER =
   (process.env.ASSISTANT_HAS_OWN_NUMBER || envConfig.ASSISTANT_HAS_OWN_NUMBER) === 'true';
 export const POLL_INTERVAL = 2000;
@@ -67,3 +67,17 @@ export const TRIGGER_PATTERN = new RegExp(
 // Uses system timezone by default
 export const TIMEZONE =
   process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+// Model selection — passed to container via ContainerInput.model
+// claude-sonnet-4-6: default for most tasks (best cost/quality balance)
+// claude-opus-4-6:   complex multi-step audit reasoning, explicit user request only
+// claude-haiku-4-5-20251001: simple quick lookups, status checks
+export const MODEL_DEFAULT = process.env.DEFAULT_MODEL || 'claude-sonnet-4-6';
+export const MODEL_COMPLEX = 'claude-opus-4-6';
+export const MODEL_FAST    = 'claude-haiku-4-5-20251001';
+
+// Soft monthly token budget per group (warns in logs if exceeded, does not hard-block)
+export const MONTHLY_TOKEN_BUDGET = parseInt(
+  process.env.MONTHLY_TOKEN_BUDGET || '500000',
+  10,
+);

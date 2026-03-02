@@ -8,7 +8,7 @@ import {
   POLL_INTERVAL,
   TRIGGER_PATTERN,
 } from './config.js';
-import { WhatsAppChannel } from './channels/whatsapp.js';
+import { SlackChannel } from './channels/slack.js';
 import {
   ContainerOutput,
   runContainerAgent,
@@ -16,6 +16,7 @@ import {
   writeTasksSnapshot,
 } from './container-runner.js';
 import { cleanupOrphans, ensureContainerRuntimeRunning } from './container-runtime.js';
+import { readEnvFile } from './env.js';
 import {
   getAllChats,
   getAllRegisteredGroups,
@@ -35,6 +36,7 @@ import { GroupQueue } from './group-queue.js';
 import { resolveGroupFolderPath } from './group-folder.js';
 import { startIpcWatcher } from './ipc.js';
 import { findChannel, formatMessages, formatOutbound } from './router.js';
+import { startApiServer } from './api.js';
 import { startSchedulerLoop } from './task-scheduler.js';
 import { Channel, NewMessage, RegisteredGroup } from './types.js';
 import { logger } from './logger.js';
@@ -48,7 +50,7 @@ let registeredGroups: Record<string, RegisteredGroup> = {};
 let lastAgentTimestamp: Record<string, string> = {};
 let messageLoopRunning = false;
 
-let whatsapp: WhatsAppChannel;
+let slack: SlackChannel;
 const channels: Channel[] = [];
 const queue = new GroupQueue();
 
@@ -444,10 +446,36 @@ async function main(): Promise<void> {
     registeredGroups: () => registeredGroups,
   };
 
+  // Load Slack tokens
+  // Slack requires TWO tokens: Bot Token (xoxb-) and App Token (xapp-) for Socket Mode
+  // DEV_SLACK_BOT_TOKEN for development (M1), SLACK_BOT_TOKEN for production (Intel)
+  const slackEnv = readEnvFile([
+    'DEV_SLACK_BOT_TOKEN',
+    'DEV_SLACK_APP_TOKEN',
+    'SLACK_BOT_TOKEN',
+    'SLACK_APP_TOKEN',
+  ]);
+  const slackBotToken = process.env.DEV_SLACK_BOT_TOKEN || slackEnv.DEV_SLACK_BOT_TOKEN ||
+                        process.env.SLACK_BOT_TOKEN || slackEnv.SLACK_BOT_TOKEN;
+  const slackAppToken = process.env.DEV_SLACK_APP_TOKEN || slackEnv.DEV_SLACK_APP_TOKEN ||
+                        process.env.SLACK_APP_TOKEN || slackEnv.SLACK_APP_TOKEN;
+
+  if (!slackBotToken || !slackAppToken) {
+    logger.error('Both SLACK_BOT_TOKEN and SLACK_APP_TOKEN environment variables are required');
+    logger.error('(Or DEV_SLACK_BOT_TOKEN and DEV_SLACK_APP_TOKEN for development)');
+    logger.error('Please set up your Slack app tokens in .env file');
+    logger.error('See SLACK_SETUP.md for instructions');
+    process.exit(1);
+  }
+
   // Create and connect channels
-  whatsapp = new WhatsAppChannel(channelOpts);
-  channels.push(whatsapp);
-  await whatsapp.connect();
+  slack = new SlackChannel({
+    ...channelOpts,
+    botToken: slackBotToken,
+    appToken: slackAppToken
+  });
+  channels.push(slack);
+  await slack.connect();
 
   // Start subsystems (independently of connection handler)
   startSchedulerLoop({
@@ -473,11 +501,12 @@ async function main(): Promise<void> {
     },
     registeredGroups: () => registeredGroups,
     registerGroup,
-    syncGroupMetadata: (force) => whatsapp?.syncGroupMetadata(force) ?? Promise.resolve(),
+    syncGroupMetadata: (force) => Promise.resolve(), // Slack provides names inline, no separate sync needed
     getAvailableGroups,
     writeGroupsSnapshot: (gf, im, ag, rj) => writeGroupsSnapshot(gf, im, ag, rj),
   });
   queue.setProcessMessagesFn(processGroupMessages);
+  startApiServer();
   recoverPendingMessages();
   startMessageLoop().catch((err) => {
     logger.fatal({ err }, 'Message loop crashed unexpectedly');

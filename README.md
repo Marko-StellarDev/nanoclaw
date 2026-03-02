@@ -17,6 +17,22 @@ Using Claude Code, NanoClaw can dynamically rewrite its code to customize its fe
 
 **New:** First AI assistant to support [Agent Swarms](https://code.claude.com/docs/en/agent-teams). Spin up teams of agents that collaborate in your chat.
 
+---
+
+## 🚀 Custom Fork - Session Recovery
+
+**If you're returning to this project after closing the terminal:**
+1. Read **`PROJECT_STATUS.md`** first - Complete todo list, phase tracking, what's done, what's next
+2. Read **`CODEBASE_INDEX.md`** - Architecture reference and file index
+3. Read **`INITIAL_PROMPT.md`** - Original project requirements
+
+**Quick Status:**
+- ✓ Phase 1B Complete: Slack integration (replaced WhatsApp)
+- ⏳ Phase 1D Next: Create SOUL.md files for keb-ops and personal channels
+- See `PROJECT_STATUS.md` for full roadmap
+
+---
+
 ## Why I Built NanoClaw
 
 [OpenClaw](https://github.com/openclaw/openclaw) is an impressive project, but I wouldn't have been able to sleep if I had given complex software I didn't understand full access to my life. OpenClaw has nearly half a million lines of code, 53 config files, and 70+ dependencies. Its security is at the application level (allowlists, pairing codes) rather than true OS-level isolation. Everything runs in one Node process with shared memory.
@@ -65,19 +81,19 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 
 ## Usage
 
-Talk to your assistant with the trigger word (default: `@Andy`):
+Talk to your assistant with the trigger word (default: `@StellarBot`):
 
 ```
-@Andy send an overview of the sales pipeline every weekday morning at 9am (has access to my Obsidian vault folder)
-@Andy review the git history for the past week each Friday and update the README if there's drift
-@Andy every Monday at 8am, compile news on AI developments from Hacker News and TechCrunch and message me a briefing
+@StellarBot send an overview of the sales pipeline every weekday morning at 9am (has access to my Obsidian vault folder)
+@StellarBot review the git history for the past week each Friday and update the README if there's drift
+@StellarBot every Monday at 8am, compile news on AI developments from Hacker News and TechCrunch and message me a briefing
 ```
 
 From the main channel (your self-chat), you can manage groups and tasks:
 ```
-@Andy list all scheduled tasks across groups
-@Andy pause the Monday briefing task
-@Andy join the Family Chat group
+@StellarBot list all scheduled tasks across groups
+@StellarBot pause the Monday briefing task
+@StellarBot join the Family Chat group
 ```
 
 ## Customizing
