@@ -83,4 +83,20 @@ export class ApiService {
   allTasks(): Observable<Task[]> {
     return this.http.get<Task[]>('/api/tasks');
   }
+
+  audit(limit = 100, group?: string): Observable<AuditEvent[]> {
+    const q = group ? `?limit=${limit}&group=${group}` : `?limit=${limit}`;
+    return this.http.get<AuditEvent[]>(`/api/audit${q}`);
+  }
+}
+
+export interface AuditEvent {
+  id: string;
+  ts: string;
+  group_folder: string;
+  group_name: string;
+  type: 'user' | 'bot' | 'task';
+  summary: string;
+  detail: string;
+  status?: string;
 }

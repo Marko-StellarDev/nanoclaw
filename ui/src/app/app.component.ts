@@ -14,6 +14,7 @@ import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
       <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
       <a routerLink="/keb" routerLinkActive="active" class="keb-link">KEB Ops</a>
       <a routerLink="/tasks" routerLinkActive="active">Tasks</a>
+      <a routerLink="/audit" routerLinkActive="active">Audit Log</a>
     </nav>
     <main class="content">
       <router-outlet />

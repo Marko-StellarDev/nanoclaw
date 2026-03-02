@@ -19,7 +19,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { GROUPS_DIR } from './config.js';
-import { getAllRegisteredGroups, getAllTasks, getRecentMessages } from './db.js';
+import { getAllRegisteredGroups, getAllTasks, getRecentMessages, getAuditEvents } from './db.js';
 import { isValidGroupFolder } from './group-folder.js';
 import { logger } from './logger.js';
 
@@ -119,6 +119,18 @@ export function startApiServer(): void {
       // GET /api/tasks
       if (url.pathname === '/api/tasks') {
         json(res, getAllTasks());
+        return;
+      }
+
+      // GET /api/audit?limit=100&group=keb-ops
+      if (url.pathname === '/api/audit') {
+        const limit = Math.min(parseInt(url.searchParams.get('limit') || '100', 10), 500);
+        const group = url.searchParams.get('group') || undefined;
+        if (group && !isValidGroupFolder(group)) {
+          json(res, { error: 'Invalid group' }, 400);
+          return;
+        }
+        json(res, getAuditEvents(limit, group));
         return;
       }
 

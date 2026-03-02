@@ -361,6 +361,62 @@ export function getRecentMessages(folder: string, limit = 50): MessageRow[] {
     .all(group.jid, limit) as MessageRow[];
 }
 
+export interface AuditEvent {
+  id: string;
+  ts: string;
+  group_folder: string;
+  group_name: string;
+  type: 'user' | 'bot' | 'task';
+  summary: string;
+  detail: string;
+  status?: string; // for task events: 'success' | 'error'
+}
+
+/**
+ * Unified audit event feed — messages (user + bot) and task run logs,
+ * sorted newest-first. Optionally filtered to a single group folder.
+ */
+export function getAuditEvents(limit = 100, folder?: string): AuditEvent[] {
+  const folderFilter = folder ? `AND rg.folder = ?` : '';
+  const args: (string | number)[] = folder ? [folder, folder, limit] : [limit];
+
+  const rows = db.prepare(`
+    SELECT
+      'msg-' || m.id || '-' || m.chat_jid AS id,
+      m.timestamp AS ts,
+      rg.folder AS group_folder,
+      rg.name AS group_name,
+      CASE WHEN m.is_bot_message = 1 THEN 'bot' ELSE 'user' END AS type,
+      SUBSTR(m.content, 1, 100) AS summary,
+      m.content AS detail,
+      NULL AS status
+    FROM messages m
+    JOIN registered_groups rg ON m.chat_jid = rg.jid
+    WHERE 1=1 ${folderFilter}
+
+    UNION ALL
+
+    SELECT
+      'task-' || trl.id AS id,
+      trl.run_at AS ts,
+      st.group_folder,
+      COALESCE(rg.name, st.group_folder) AS group_name,
+      'task' AS type,
+      SUBSTR(st.prompt, 1, 100) AS summary,
+      COALESCE(trl.result, trl.error, '') AS detail,
+      trl.status
+    FROM task_run_logs trl
+    JOIN scheduled_tasks st ON trl.task_id = st.id
+    LEFT JOIN registered_groups rg ON st.group_folder = rg.folder
+    WHERE 1=1 ${folderFilter ? `AND st.group_folder = ?` : ''}
+
+    ORDER BY ts DESC
+    LIMIT ?
+  `).all(...args) as AuditEvent[];
+
+  return rows;
+}
+
 export function createTask(
   task: Omit<ScheduledTask, 'last_run' | 'last_result'>,
 ): void {
