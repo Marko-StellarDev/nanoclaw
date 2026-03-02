@@ -301,10 +301,11 @@ npm install && npm run build
 - Added tool-use activity logging: .activity.jsonl hook + API merge + UI display
 
 ### Session 7 (2026-03-02)
-- Model tracking in audit log: `model` column added to `task_run_logs` (auto-migrated)
+- Model tracking in audit log: `model` column on both `messages` and `task_run_logs` (auto-migrated, existing bot rows backfilled)
+- `storeMessageDirect()` accepts `model`; `src/index.ts` passes `MODEL_DEFAULT` for every bot response
 - Task scheduler logs `MODEL_DEFAULT` on every run
-- `AuditEvent` + API surface `model` field
-- Audit UI shows compact model tag (`sonnet-4.6`) on task rows only
+- `getAuditEvents()` selects `m.model` for message rows
+- Audit UI shows compact model tag (`sonnet-4.6`) on all bot + task rows, in type column (not activity cell, so never clipped)
 
 ### Session 5 (2026-03-02)
 - Chat input per group on Dashboard (Enter to send, Shift+Enter newline, optimistic UI)
