@@ -92,9 +92,9 @@ import { ApiService, Task, Group, NewTask } from '../../services/api.service';
           <tr *ngFor="let t of tasks">
             <td><span class="tag">{{ t.group_folder }}</span></td>
             <td class="prompt-cell" [title]="t.prompt">{{ t.prompt | slice:0:80 }}{{ t.prompt.length > 80 ? '…' : '' }}</td>
-            <td>
-              <span class="tag">{{ t.schedule_type }}</span><br>
-              <span class="mono small">{{ t.schedule_value }}</span>
+            <td class="schedule-cell">
+              <span class="schedule-english">{{ scheduleLabel(t) }}</span>
+              <span class="tag small">{{ t.schedule_type }}</span>
             </td>
             <td class="mono small">{{ t.next_run ? (t.next_run | date:'dd MMM HH:mm') : '—' }}</td>
             <td class="mono small">{{ t.last_run ? (t.last_run | date:'dd MMM HH:mm') : '—' }}</td>
@@ -202,6 +202,9 @@ import { ApiService, Task, Group, NewTask } from '../../services/api.service';
     /* Table */
     .prompt-cell { max-width: 220px; font-size: 13px; color: var(--text-muted); cursor: default; }
     .small { font-size: 11px; }
+
+    .schedule-cell { white-space: nowrap; }
+    .schedule-english { display: block; font-size: 13px; margin-bottom: 4px; }
     .summary { display: flex; gap: 8px; margin-top: 16px; }
 
     /* Action buttons */
@@ -275,6 +278,100 @@ export class TasksComponent implements OnInit {
 
   get activeTasks() { return this.tasks.filter(t => t.status === 'active').length; }
   get pausedTasks()  { return this.tasks.filter(t => t.status === 'paused').length; }
+
+  scheduleLabel(t: Task): string {
+    if (t.schedule_type === 'interval') return this.intervalLabel(parseInt(t.schedule_value));
+    if (t.schedule_type === 'once')     return this.onceLabel(t.schedule_value);
+    if (t.schedule_type === 'cron')     return this.cronLabel(t.schedule_value);
+    return t.schedule_value;
+  }
+
+  private intervalLabel(ms: number): string {
+    if (isNaN(ms) || ms <= 0) return 'Invalid interval';
+    if (ms < 60_000)          return `Every ${ms / 1000}s`;
+    if (ms < 3_600_000)       return `Every ${this.round(ms / 60_000)} min`;
+    if (ms < 86_400_000)      return `Every ${this.round(ms / 3_600_000)} hr`;
+    return `Every ${this.round(ms / 86_400_000)} day${ms >= 2 * 86_400_000 ? 's' : ''}`;
+  }
+
+  private onceLabel(value: string): string {
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return value;
+    return `Once — ${d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`;
+  }
+
+  private cronLabel(cron: string): string {
+    const parts = cron.trim().split(/\s+/);
+    if (parts.length !== 5) return cron;
+    const [min, hr, dom, mon, dow] = parts;
+
+    // Every minute
+    if (min === '*' && hr === '*' && dom === '*' && mon === '*' && dow === '*')
+      return 'Every minute';
+
+    // Every N minutes: */N * * * *
+    const minStep = min.match(/^\*\/(\d+)$/);
+    if (minStep && hr === '*' && dom === '*' && mon === '*' && dow === '*')
+      return `Every ${minStep[1]} min`;
+
+    // Every hour: 0 * * * *
+    if (min === '0' && hr === '*' && dom === '*' && mon === '*' && dow === '*')
+      return 'Every hour';
+
+    // Every N hours: 0 */N * * *
+    const hrStep = hr.match(/^\*\/(\d+)$/);
+    if (hrStep && dom === '*' && mon === '*' && dow === '*') {
+      const m = parseInt(min);
+      const suffix = !isNaN(m) && m > 0 ? ` at :${String(m).padStart(2, '0')}` : '';
+      return `Every ${hrStep[1]} hr${suffix}`;
+    }
+
+    // Has a fixed time: X Y ...
+    const h = parseInt(hr), m = parseInt(min);
+    if (!isNaN(h) && !isNaN(m) && mon === '*') {
+      const time = this.fmtTime(h, m);
+
+      // Monthly: X Y D * *
+      if (dow === '*' && dom !== '*') {
+        const d = parseInt(dom);
+        return !isNaN(d) ? `Monthly on the ${this.ordinal(d)} at ${time}` : cron;
+      }
+
+      // Day-of-week patterns
+      if (dom === '*') {
+        if (dow === '*')                                    return `Daily at ${time}`;
+        if (dow === '1-5' || dow === '1,2,3,4,5')          return `Weekdays at ${time}`;
+        if (dow === '6,0' || dow === '0,6' || dow === '6') return `Weekends at ${time}`;
+        const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        // Single day
+        const d = parseInt(dow);
+        if (!isNaN(d) && d >= 0 && d <= 7) return `${names[d % 7]}s at ${time}`;
+        // Comma list of days
+        const days = dow.split(',').map(Number);
+        if (days.every(n => !isNaN(n) && n >= 0 && n <= 7))
+          return `${days.map(n => names[n % 7]).join(', ')} at ${time}`;
+      }
+    }
+
+    return cron; // fall back to raw for unusual expressions
+  }
+
+  private fmtTime(h: number, m: number): string {
+    const period = h >= 12 ? 'PM' : 'AM';
+    const dh = h % 12 || 12;
+    const dm = m > 0 ? `:${String(m).padStart(2, '0')}` : '';
+    return `${dh}${dm} ${period}`;
+  }
+
+  private ordinal(n: number): string {
+    const s = ['th','st','nd','rd'];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+
+  private round(n: number): string {
+    return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  }
 
   get schedulePlaceholder(): string {
     if (this.form.schedule_type === 'cron')     return '0 9 * * 1-5  (weekdays 9am)';
