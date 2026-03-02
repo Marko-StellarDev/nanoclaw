@@ -4,6 +4,7 @@ import path from 'path';
 
 import { DATA_DIR, MAX_CONCURRENT_CONTAINERS } from './config.js';
 import { logger } from './logger.js';
+import { setAgentStatus, clearAgentStatus } from './agent-status.js';
 
 interface QueuedTask {
   id: string;
@@ -127,7 +128,10 @@ export class GroupQueue {
     const state = this.getGroup(groupJid);
     state.process = proc;
     state.containerName = containerName;
-    if (groupFolder) state.groupFolder = groupFolder;
+    if (groupFolder) {
+      state.groupFolder = groupFolder;
+      setAgentStatus(groupFolder, 'thinking');
+    }
   }
 
   /**
@@ -210,6 +214,7 @@ export class GroupQueue {
       logger.error({ groupJid, err }, 'Error processing messages for group');
       this.scheduleRetry(groupJid, state);
     } finally {
+      if (state.groupFolder) clearAgentStatus(state.groupFolder);
       state.active = false;
       state.process = null;
       state.containerName = null;
@@ -236,6 +241,7 @@ export class GroupQueue {
     } catch (err) {
       logger.error({ groupJid, taskId: task.id, err }, 'Error running task');
     } finally {
+      if (state.groupFolder) clearAgentStatus(state.groupFolder);
       state.active = false;
       state.isTaskContainer = false;
       state.process = null;

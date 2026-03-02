@@ -88,6 +88,38 @@ export class ApiService {
     const q = group ? `?limit=${limit}&group=${group}` : `?limit=${limit}`;
     return this.http.get<AuditEvent[]>(`/api/audit${q}`);
   }
+
+  agentStatus(): Observable<Record<string, string>> {
+    return this.http.get<Record<string, string>>('/api/status');
+  }
+
+  sendMessage(folder: string, text: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>(`/api/groups/${folder}/message`, { text });
+  }
+
+  pauseTask(id: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>(`/api/tasks/${id}/pause`, {});
+  }
+
+  resumeTask(id: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>(`/api/tasks/${id}/resume`, {});
+  }
+
+  cancelTask(id: string): Observable<{ ok: boolean }> {
+    return this.http.delete<{ ok: boolean }>(`/api/tasks/${id}`);
+  }
+
+  createTask(task: NewTask): Observable<{ ok: boolean; id: string }> {
+    return this.http.post<{ ok: boolean; id: string }>('/api/tasks', task);
+  }
+}
+
+export interface NewTask {
+  group_folder: string;
+  prompt: string;
+  schedule_type: 'cron' | 'interval' | 'once';
+  schedule_value: string;
+  context_mode: 'group' | 'isolated';
 }
 
 export interface AuditEvent {
