@@ -172,6 +172,7 @@ Container (per group)
   - Groups: `getAllRegisteredGroups()`, `registerGroup()`
   - Audit: `getAuditEvents(limit, folder?)` - UNION of messages + task_run_logs, newest-first
   - `AuditEvent` interface: `type: 'user' | 'bot' | 'task' | 'activity'`, `tool?: string`, `model?: string`
+  - `getTaskRunLogs(taskId, limit)` - run history for a specific task, newest-first; returns `TaskRunLogEntry[]`
   - `messages` schema includes `model TEXT` (auto-migrated); bot messages backfilled and new ones set to `MODEL_DEFAULT`
   - `task_run_logs` schema includes `model TEXT` (auto-migrated); set to `MODEL_DEFAULT` on every task run
   - `storeMessageDirect()` accepts optional `model` field
@@ -327,10 +328,10 @@ Container (per group)
 - Written by `GroupQueue.registerProcess()` on container start; cleared in `finally` blocks on container stop
 - Read by `GET /api/status` endpoint
 
-**`src/api.ts` (417 lines)**
+**`src/api.ts` (~445 lines)**
 - Lightweight REST API using Node built-in `http` (zero new deps)
 - **Port:** `3001` (override with `API_PORT`); binds to `127.0.0.1` by default (set `API_HOST=0.0.0.0` for LAN access)
-- **GET endpoints:** `/api/health`, `/api/status`, `/api/groups`, `/api/groups/:folder/messages`, `/api/groups/:folder/usage`, `/api/groups/:folder/tasks`, `/api/tasks`, `/api/audit`
+- **GET endpoints:** `/api/health`, `/api/status`, `/api/groups`, `/api/groups/:folder/messages`, `/api/groups/:folder/usage`, `/api/groups/:folder/tasks`, `/api/tasks`, `/api/tasks/:id/runs`, `/api/audit`
 - **POST endpoints:** `/api/groups/:folder/message` (chat), `/api/tasks` (create), `/api/tasks/:id/pause`, `/api/tasks/:id/resume`
 - **DELETE endpoint:** `/api/tasks/:id` (cancel)
 - `readBody(req)` — parses POST JSON body
@@ -341,7 +342,7 @@ Container (per group)
 - Angular 17 standalone app, served on `:4200` (`cd ui && npm start`)
 - **Theme:** Sci-fi "Neural Interface" — void black (`#040d18`), electric cyan (`#00c8ff`), matrix green (`#00ff88`), purple (`#7b2fff`). Fonts: Rajdhani (headings/nav), JetBrains Mono (data). Canvas particle network background (70 nodes, animated connections) in `app.component.ts`. Glassmorphism cards with CSS corner-bracket `::before`/`::after` decorations.
 - **Style budget:** `anyComponentStyle` at 8kb warning / 16kb error (`angular.json`)
-- **`api.service.ts` — `MonthlyUsage` interface:** `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `runs`, `budget_used_pct`, `model?`
+- **`api.service.ts` interfaces:** `MonthlyUsage` (`input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `runs`, `budget_used_pct`, `model?`); `TaskRun` (`id`, `task_id`, `run_at`, `duration_ms`, `status`, `result`, `error`); `getTaskRuns(taskId, limit)` method
 - **Dashboard** (`// 01 SYSTEM STATUS`) — group cards with terminal-style message stream, chat input (Enter to send, Shift+Enter newline), pulsing green dot + wave animation when agent is thinking (polls `/api/status` every 5s), auto-refreshes messages
 - **KEB Ops** (`// 02 KEB OPS`) — node-indexed branches (N01..N07), segmented budget bar with 25/50/75% markers, token telemetry, tasks, message history
 - **Tasks** (`// 03 TASK SCHEDULER`) — task table with pause/resume/cancel buttons, `scheduleLabel()` converts cron/ms/once to plain English; "+ New Task" form with preset schedule dropdown (14 cron, 8 interval presets + datetime-local picker for once; "Custom…" reveals raw input)
@@ -615,11 +616,14 @@ nanoclaw/
 │   ├── index.ts                  # Orchestrator (entry point)
 │   ├── config.ts                 # Configuration
 │   ├── db.ts                     # SQLite
-│   ├── channels/slack.ts         # Slack channel
+│   ├── channels/slack.ts         # Slack channel (incl. file download + voice)
+│   ├── transcription.ts          # OpenAI Whisper voice transcription
 │   ├── container-runner.ts       # Agent spawner
 │   ├── group-queue.ts            # Concurrency
 │   ├── ipc.ts                    # IPC watcher
 │   └── task-scheduler.ts         # Scheduler
+├── scripts/                      # Operational scripts
+│   └── watchdog.sh               # Health-check + auto-restart (launchd, 5 min)
 ├── container/                    # Container image
 │   ├── Dockerfile                # Image definition
 │   ├── agent-runner/             # Container-side agent

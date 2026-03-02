@@ -128,18 +128,47 @@
 
 ---
 
+## SESSION 10 ADDITIONS ✅ (2026-03-02)
+
+### Task Run History
+- ✅ `src/db.ts`: `getTaskRunLogs(taskId, limit)` + `TaskRunLogEntry` interface
+- ✅ `src/api.ts`: `GET /api/tasks/:id/runs` endpoint
+- ✅ `ui/src/app/services/api.service.ts`: `TaskRun` interface + `getTaskRuns()` method
+- ✅ `ui/.../tasks/tasks.component.ts`: ◷ HISTORY button per row → expandable sub-row with run table (time, duration, status badge, result snippet)
+
+### Slack File Uploads
+- ✅ `src/channels/slack.ts`: handles `file_share` subtype + `files[]` on any message
+- ✅ Downloads to `groups/{folder}/uploads/` (50MB cap, sanitised names)
+- ✅ Agent sees `[Attached file: name → /workspace/group/uploads/name]`
+- ✅ Audio/video mimetypes routed to Whisper transcription
+
+### Voice Note Transcription
+- ✅ `src/transcription.ts`: `isAudioMimetype()` + `transcribeAudioFile()` via OpenAI Whisper
+- ✅ Dynamic `import('openai')` — zero overhead when `OPENAI_API_KEY` not set
+- ✅ Agent sees `[Voice: transcript]`; falls back to file path if key absent
+- ✅ `openai` npm package added; `.env.example` updated
+
+### Watchdog Auto-Restart
+- ✅ `scripts/watchdog.sh`: single-shot health check, 3-failure threshold, state file, `launchctl kickstart` on failure
+- ✅ `INTEL_SETUP.md`: Watchdog Setup section with launchd plist template
+
+---
+
 ## FILE STRUCTURE
 
 ```
 nanoclaw/
 ├── src/
 │   ├── index.ts              # Orchestrator — starts API + message loop
-│   ├── api.ts                # REST API (Phase 5)
-│   ├── channels/slack.ts     # Slack Bolt, Socket Mode, mention fix
+│   ├── api.ts                # REST API (Phase 5 + /tasks/:id/runs)
+│   ├── channels/slack.ts     # Slack Bolt, Socket Mode, file uploads, voice
+│   ├── transcription.ts      # OpenAI Whisper voice transcription
 │   ├── config.ts             # MODEL_DEFAULT, MODEL_COMPLEX, MODEL_FAST
-│   ├── db.ts                 # SQLite — getRecentMessages() added
+│   ├── db.ts                 # SQLite — getRecentMessages(), getTaskRunLogs()
 │   ├── container-runner.ts   # Agent spawner — passes model to container
 │   └── task-scheduler.ts     # Scheduled tasks
+├── scripts/
+│   └── watchdog.sh           # Health-check + auto-restart (launchd)
 ├── container/
 │   ├── Dockerfile            # Multi-arch, Chromium + agent-browser
 │   └── agent-runner/src/
