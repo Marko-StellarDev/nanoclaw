@@ -398,7 +398,8 @@ export function getAuditEvents(limit = 100, folder?: string): AuditEvent[] {
       CASE WHEN m.is_bot_message = 1 THEN 'bot' ELSE 'user' END AS type,
       SUBSTR(m.content, 1, 100) AS summary,
       m.content AS detail,
-      NULL AS status
+      NULL AS status,
+      NULL AS model
     FROM messages m
     JOIN registered_groups rg ON m.chat_jid = rg.jid
     WHERE 1=1 ${folderFilter}
