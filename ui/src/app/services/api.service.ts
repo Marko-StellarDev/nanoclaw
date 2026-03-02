@@ -95,8 +95,9 @@ export interface AuditEvent {
   ts: string;
   group_folder: string;
   group_name: string;
-  type: 'user' | 'bot' | 'task';
+  type: 'user' | 'bot' | 'task' | 'activity';
   summary: string;
   detail: string;
   status?: string;
+  tool?: string;
 }

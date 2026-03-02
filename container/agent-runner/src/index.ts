@@ -204,6 +204,72 @@ function createPreCompactHook(assistantName?: string): HookCallback {
   };
 }
 
+/**
+ * Generate a human-readable description of a tool call for the activity log.
+ */
+function describeToolUse(toolName: string, toolInput: Record<string, unknown>): string {
+  switch (toolName) {
+    case 'Bash': {
+      const cmd = String(toolInput.command || '').replace(/\n/g, ' ').trim();
+      // agent-browser commands (look for URL patterns)
+      if (cmd.includes('agent-browser') || cmd.includes('chromium') || cmd.includes('puppeteer')) {
+        const urlMatch = cmd.match(/https?:\/\/[^\s'"]+/);
+        if (urlMatch) return `Opening browser: ${urlMatch[0]}`;
+        return 'Using browser automation';
+      }
+      const display = cmd.slice(0, 120);
+      return `Running: ${display}${cmd.length > 120 ? '…' : ''}`;
+    }
+    case 'WebFetch': {
+      const url = String(toolInput.url || '');
+      return `Fetching: ${url}`;
+    }
+    case 'WebSearch': {
+      const q = String(toolInput.query || '');
+      return `Searching web: ${q}`;
+    }
+    case 'Read':
+      return `Reading: ${path.basename(String(toolInput.file_path || ''))}`;
+    case 'Write':
+      return `Writing: ${path.basename(String(toolInput.file_path || ''))}`;
+    case 'Edit':
+      return `Editing: ${path.basename(String(toolInput.file_path || ''))}`;
+    case 'Glob':
+      return `Finding files: ${toolInput.pattern || ''}`;
+    case 'Grep':
+      return `Searching code: ${toolInput.pattern || ''}`;
+    case 'Task': {
+      const desc = String(toolInput.description || '');
+      return `Spawning agent: ${desc.slice(0, 80)}${desc.length > 80 ? '…' : ''}`;
+    }
+    case 'TodoWrite':
+      return 'Updating task list';
+    default:
+      return `Using ${toolName}`;
+  }
+}
+
+/**
+ * Hook that logs every tool call as a JSONL entry to /workspace/group/.activity.jsonl.
+ * This powers the "background process" view in the audit log UI.
+ */
+function createActivityLogHook(): HookCallback {
+  const activityFile = '/workspace/group/.activity.jsonl';
+  return async (input, _toolUseId, _context) => {
+    const preInput = input as PreToolUseHookInput;
+    const toolName = (preInput as { tool_name?: string }).tool_name || 'Unknown';
+    const toolInput = (preInput.tool_input as Record<string, unknown>) || {};
+    try {
+      const description = describeToolUse(toolName, toolInput);
+      const entry = JSON.stringify({ ts: new Date().toISOString(), tool: toolName, description });
+      fs.appendFileSync(activityFile, entry + '\n');
+    } catch {
+      // Never fail the tool call due to a logging error
+    }
+    return {};
+  };
+}
+
 // Secrets to strip from Bash tool subprocess environments.
 // These are needed by claude-code for API auth but should never
 // be visible to commands Kit runs.
@@ -535,7 +601,10 @@ async function runQuery(
       },
       hooks: {
         PreCompact: [{ hooks: [createPreCompactHook(containerInput.assistantName)] }],
-        PreToolUse: [{ matcher: 'Bash', hooks: [createSanitizeBashHook()] }],
+        PreToolUse: [
+          { matcher: 'Bash', hooks: [createSanitizeBashHook()] },
+          { hooks: [createActivityLogHook()] },
+        ],
       },
     }
   })) {

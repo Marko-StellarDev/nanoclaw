@@ -41,6 +41,7 @@ import { ApiService, AuditEvent, Group } from '../../services/api.service';
             <td><span class="tag">{{ e.group_folder }}</span></td>
             <td><span class="badge" [class]="typeBadgeClass(e)">{{ typeLabel(e) }}</span></td>
             <td class="activity-cell" [title]="e.detail">
+              <span *ngIf="e.type === 'activity'" class="tool-icon">{{ toolIcon(e.tool) }}</span>
               {{ e.summary }}{{ e.summary.length >= 100 ? '…' : '' }}
             </td>
           </tr>
@@ -53,6 +54,7 @@ import { ApiService, AuditEvent, Group } from '../../services/api.service';
       <span class="tag">{{ userCount }} user</span>
       <span class="tag">{{ botCount }} bot</span>
       <span class="tag">{{ taskCount }} task</span>
+      <span class="tag">{{ activityCount }} steps</span>
     </div>
   `,
   styles: [`
@@ -113,8 +115,21 @@ import { ApiService, AuditEvent, Group } from '../../services/api.service';
     }
 
     /* row tints */
-    .row-bot td  { background: rgba(99,102,241,0.04); }
-    .row-task td { background: rgba(249,115,22,0.04); }
+    .row-bot td      { background: rgba(99,102,241,0.04); }
+    .row-task td     { background: rgba(249,115,22,0.04); }
+    .row-activity td {
+      opacity: 0.65;
+      font-style: italic;
+      font-size: 12px;
+    }
+
+    .tool-icon {
+      font-style: normal;
+      margin-right: 4px;
+    }
+
+    /* activity badge */
+    .badge.activity { background: rgba(148,163,184,0.15); color: var(--text-muted); }
 
     .footer {
       margin-top: 12px;
@@ -139,20 +154,32 @@ export class AuditComponent implements OnInit, OnDestroy {
   private selectedGroup = '';
   private timer: ReturnType<typeof setInterval> | null = null;
 
-  get userCount() { return this.events.filter(e => e.type === 'user').length; }
-  get botCount()  { return this.events.filter(e => e.type === 'bot').length; }
-  get taskCount() { return this.events.filter(e => e.type === 'task').length; }
+  get userCount()     { return this.events.filter(e => e.type === 'user').length; }
+  get botCount()      { return this.events.filter(e => e.type === 'bot').length; }
+  get taskCount()     { return this.events.filter(e => e.type === 'task').length; }
+  get activityCount() { return this.events.filter(e => e.type === 'activity').length; }
 
   typeLabel(e: AuditEvent): string {
-    if (e.type === 'user') return 'User';
-    if (e.type === 'bot')  return 'Bot';
+    if (e.type === 'user')     return 'User';
+    if (e.type === 'bot')      return 'Bot';
+    if (e.type === 'activity') return e.tool || 'Step';
     return e.status === 'error' ? 'Task ✗' : 'Task ✓';
   }
 
   typeBadgeClass(e: AuditEvent): string {
-    if (e.type === 'user') return 'user';
-    if (e.type === 'bot')  return 'bot';
+    if (e.type === 'user')     return 'user';
+    if (e.type === 'bot')      return 'bot';
+    if (e.type === 'activity') return 'activity';
     return e.status === 'error' ? 'paused task' : 'active task';
+  }
+
+  toolIcon(tool?: string): string {
+    const icons: Record<string, string> = {
+      Bash: '⚙', WebFetch: '🌐', WebSearch: '🔍',
+      Read: '📄', Write: '✏', Edit: '✏', Glob: '📁', Grep: '🔎',
+      Task: '🤖', TodoWrite: '✓',
+    };
+    return tool ? (icons[tool] || '▸') : '▸';
   }
 
   ngOnInit(): void {

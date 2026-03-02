@@ -19,7 +19,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { GROUPS_DIR } from './config.js';
-import { getAllRegisteredGroups, getAllTasks, getRecentMessages, getAuditEvents } from './db.js';
+import { getAllRegisteredGroups, getAllTasks, getRecentMessages, getAuditEvents, AuditEvent } from './db.js';
 import { isValidGroupFolder } from './group-folder.js';
 import { logger } from './logger.js';
 
@@ -76,6 +76,51 @@ function readAllMonthsUsage(folder: string): unknown[] {
     .filter(Boolean);
 }
 
+/**
+ * Read tool-use activity events from .activity.jsonl files in each group's directory.
+ * These are written by the createActivityLogHook inside the container on every tool call.
+ * Returns up to `maxPerGroup` events per group, newest-first.
+ */
+function readActivityEvents(folder?: string, maxPerGroup = 500): AuditEvent[] {
+  const events: AuditEvent[] = [];
+  const groups = getAllRegisteredGroups();
+
+  const foldersToRead = folder
+    ? [folder]
+    : Object.values(groups).map(g => g.folder);
+
+  for (const f of foldersToRead) {
+    const activityFile = path.join(GROUPS_DIR, f, '.activity.jsonl');
+    if (!fs.existsSync(activityFile)) continue;
+    try {
+      const lines = fs.readFileSync(activityFile, 'utf-8')
+        .split('\n')
+        .filter(l => l.trim());
+      // Take the last maxPerGroup lines (most recent)
+      const recent = lines.slice(-maxPerGroup);
+      const groupName = Object.values(groups).find(g => g.folder === f)?.name || f;
+      for (const line of recent) {
+        try {
+          const entry = JSON.parse(line);
+          if (!entry.ts || !entry.tool || !entry.description) continue;
+          events.push({
+            id: `activity-${f}-${entry.ts}-${entry.tool}`,
+            ts: entry.ts,
+            group_folder: f,
+            group_name: groupName,
+            type: 'activity',
+            summary: entry.description,
+            detail: entry.description,
+            tool: entry.tool,
+          });
+        } catch { /* skip malformed lines */ }
+      }
+    } catch { /* skip unreadable files */ }
+  }
+
+  return events;
+}
+
 export function startApiServer(): void {
   const server = http.createServer((req, res) => {
     // CORS preflight
@@ -130,7 +175,12 @@ export function startApiServer(): void {
           json(res, { error: 'Invalid group' }, 400);
           return;
         }
-        json(res, getAuditEvents(limit, group));
+        const dbEvents = getAuditEvents(limit, group);
+        const activityEvents = readActivityEvents(group);
+        const merged = [...dbEvents, ...activityEvents]
+          .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
+          .slice(0, limit);
+        json(res, merged);
         return;
       }
 

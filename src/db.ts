@@ -366,10 +366,11 @@ export interface AuditEvent {
   ts: string;
   group_folder: string;
   group_name: string;
-  type: 'user' | 'bot' | 'task';
+  type: 'user' | 'bot' | 'task' | 'activity';
   summary: string;
   detail: string;
   status?: string; // for task events: 'success' | 'error'
+  tool?: string;  // for activity events: tool name (Bash, WebFetch, etc.)
 }
 
 /**
