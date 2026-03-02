@@ -34,6 +34,9 @@ export class SlackChannel implements Channel {
   private flushing = false;
   private opts: SlackChannelOpts;
   private botUserId: string = '';
+  // Dedup: when a user @mentions the bot, Slack fires both app_mention AND message.
+  // Track recent mention timestamps so the message handler skips them.
+  private recentMentionTs = new Set<string>();
 
   constructor(opts: SlackChannelOpts) {
     this.opts = opts;
@@ -68,27 +71,33 @@ export class SlackChannel implements Channel {
       throw new Error(`Slack authentication failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    // Listen for app_mention events (when someone @mentions the bot)
+    // Listen for app_mention events (when someone @mentions the bot in a channel)
     logger.info('Registering app_mention event handler');
-    this.app.event('app_mention', async ({ event, say }: any) => {
+    this.app.event('app_mention', async ({ event }: any) => {
       logger.info({ event }, 'Received app_mention event');
       try {
+        // Track this ts so the message handler skips it (Slack fires both events)
+        this.recentMentionTs.add(event.ts);
+        setTimeout(() => this.recentMentionTs.delete(event.ts), 10_000);
         await this.handleMessage(event, true);
       } catch (err) {
         logger.error({ err, event }, 'Error handling Slack app_mention');
       }
     });
 
-    // Listen for direct messages
+    // Listen for all messages — DMs and channel messages.
+    // Groups with requiresTrigger=false respond to everything;
+    // groups with requiresTrigger=true only respond to @mentions (handled above).
+    // Future Telegram: bot.on('text', ...) replaces this handler
     logger.info('Registering message event handler');
     this.app.event('message', async ({ event }: any) => {
       logger.info({ event, channel_type: (event as any).channel_type }, 'Received message event');
       try {
-        // Only handle direct messages (DMs), not channel messages
-        // Channel messages are handled by app_mention
-        if ((event as any).channel_type === 'im') {
-          await this.handleMessage(event);
-        }
+        // Skip subtypes (message_changed, message_deleted, bot_message, etc.)
+        if ((event as any).subtype) return;
+        // Skip if already handled as an app_mention (dedup)
+        if (this.recentMentionTs.has(event.ts)) return;
+        await this.handleMessage(event);
       } catch (err) {
         logger.error({ err, event }, 'Error handling Slack message');
       }
