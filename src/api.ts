@@ -24,6 +24,7 @@
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
+import { randomBytes } from 'crypto';
 import { CronExpressionParser } from 'cron-parser';
 
 import { GROUPS_DIR, TIMEZONE } from './config.js';
@@ -62,10 +63,21 @@ function notFound(res: http.ServerResponse): void {
   json(res, { error: 'Not found' }, 404);
 }
 
+const MAX_BODY_SIZE = 65536; // 64KB — more than enough for any valid API payload
+
 function readBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     let body = '';
-    req.on('data', chunk => { body += chunk; });
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_BODY_SIZE) {
+        req.destroy();
+        reject(new Error('Request body too large'));
+        return;
+      }
+      body += chunk;
+    });
     req.on('end', () => {
       try { resolve(body ? JSON.parse(body) : {}); }
       catch { reject(new Error('Invalid JSON body')); }
@@ -296,7 +308,7 @@ export function startApiServer(): void {
 
           const [jid] = group;
           storeMessageDirect({
-            id: `ui-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            id: `ui-${Date.now()}-${randomBytes(8).toString('hex')}`,
             chat_jid: jid,
             sender: 'web-ui',
             sender_name: 'Web UI',
@@ -333,7 +345,7 @@ export function startApiServer(): void {
           const [jid] = group;
 
           const ctxMode = context_mode === 'group' ? 'group' : 'isolated';
-          const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          const taskId = `task-${Date.now()}-${randomBytes(8).toString('hex')}`;
 
           let nextRun: string | null = null;
           try {
