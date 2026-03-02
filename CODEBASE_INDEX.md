@@ -1,6 +1,6 @@
 # NanoClaw Codebase Index
 
-**Last Updated:** 2026-03-02 (Session 5 — Chat input, task controls, agent status, task creation, schedule humaniser + dropdown)
+**Last Updated:** 2026-03-02 (Session 8 — Haiku default model, sonnet:/opus: prefix routing; prior: model column in audit log, schedule humaniser + dropdown, chat input, task controls, agent status)
 **Total Size:** ~35k tokens (17% of 200k context)
 
 **⚠️ SESSION RECOVERY:** If terminal closes, read `PROJECT_STATUS.md` first - contains todo list, completed work, and next steps
@@ -102,7 +102,7 @@ Container (per group)
 
 ### Core Orchestration
 
-**`src/index.ts` (499 lines)**
+**`src/index.ts` (560 lines)**
 - Main entry point and orchestrator
 - **State:**
   - `lastTimestamp` - Global message cursor
@@ -120,7 +120,7 @@ Container (per group)
 
 ### Configuration & Environment
 
-**`src/config.ts` (70 lines)**
+**`src/config.ts` (85 lines)**
 - Exports all configuration constants
 - **Key Exports:**
   - `ASSISTANT_NAME` - Default "StellarBot" (from `.env`)
@@ -152,7 +152,7 @@ Container (per group)
 
 ### Database & State
 
-**`src/db.ts` (670 lines)**
+**`src/db.ts` (778 lines)**
 - SQLite via better-sqlite3
 - **Location:** `store/messages.db`
 - **Schema:**
@@ -178,7 +178,7 @@ Container (per group)
 
 ### Channels
 
-**`src/channels/slack.ts` (310 lines)**
+**`src/channels/slack.ts` (348 lines)**
 - Slack integration via @slack/bolt with Socket Mode
 - **Class:** `SlackChannel implements Channel`
 - **Key Methods:**
@@ -313,11 +313,13 @@ Container (per group)
 
 ### Web Dashboard
 
-**`src/agent-status.ts`** (new)
-- Shared in-memory status registry: `setAgentStatus(folder, 'thinking'|'idle')`, `clearAgentStatus()`, `getAgentStatuses()`
-- Written by `GroupQueue.registerProcess()` / `finally` blocks; read by `GET /api/status`
+**`src/agent-status.ts` (21 lines)**
+- Shared in-memory status registry
+- **Exports:** `setAgentStatus(folder, 'thinking'|'idle')`, `clearAgentStatus(folder)`, `getAgentStatuses()`
+- Written by `GroupQueue.registerProcess()` on container start; cleared in `finally` blocks on container stop
+- Read by `GET /api/status` endpoint
 
-**`src/api.ts` (~290 lines)**
+**`src/api.ts` (417 lines)**
 - Lightweight REST API using Node built-in `http` (zero new deps)
 - **Port:** `3001` (override with `API_PORT`); binds to `127.0.0.1` by default (set `API_HOST=0.0.0.0` for LAN access)
 - **GET endpoints:** `/api/health`, `/api/status`, `/api/groups`, `/api/groups/:folder/messages`, `/api/groups/:folder/usage`, `/api/groups/:folder/tasks`, `/api/tasks`, `/api/audit`
@@ -365,7 +367,7 @@ Container (per group)
 
 **`src/group-queue.ts`** — updated: `registerProcess()` calls `setAgentStatus(folder, 'thinking')`; `finally` blocks in `runForGroup()` and `runTask()` call `clearAgentStatus(folder)` before nulling groupFolder.
 
-**`container/agent-runner/src/index.ts` (~650 lines)**
+**`container/agent-runner/src/index.ts` (827 lines)**
 - Container-side agent executor
 - **Input:** Stdin JSON (`ContainerInput`) with prompt, sessionId, secrets
 - **Output:** Sentinel-wrapped JSON for streaming
@@ -418,7 +420,7 @@ Container (per group)
 |-------|---------|-------------|---------|
 | `chats` | All chats (discovery) | jid, name, last_message_time, channel, is_group | last_message_time DESC |
 | `messages` | Full content (registered only) | id, jid, sender, content, timestamp, is_from_bot | timestamp DESC |
-| `scheduled_tasks` | Cron/interval/once tasks | id, group_jid, name, schedule_type, cron_expression, interval_ms, run_at, next_run, status, context_mode | next_run, status |
+| `scheduled_tasks` | Cron/interval/once tasks | id, group_folder, chat_jid, prompt, schedule_type, schedule_value, next_run, last_run, last_result, status, context_mode, created_at | next_run, status |
 | `task_run_logs` | Execution history | id, task_id, started_at, completed_at, status, result_text | task_id, started_at |
 | `router_state` | Key-value state | key, value (JSON) | key |
 | `sessions` | Claude session IDs | jid, session_id, last_updated | jid |
