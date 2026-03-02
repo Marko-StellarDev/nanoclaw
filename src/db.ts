@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 
-import { ASSISTANT_NAME, DATA_DIR, STORE_DIR } from './config.js';
+import { ASSISTANT_NAME, DATA_DIR, MODEL_DEFAULT, STORE_DIR } from './config.js';
 import { isValidGroupFolder } from './group-folder.js';
 import { logger } from './logger.js';
 import { NewMessage, RegisteredGroup, ScheduledTask, TaskRunLog } from './types.js';
@@ -107,6 +107,10 @@ function createSchema(database: Database.Database): void {
   } catch {
     /* column already exists */
   }
+  // Backfill existing rows that predate this column
+  database.prepare(
+    `UPDATE task_run_logs SET model = ? WHERE model IS NULL`,
+  ).run(MODEL_DEFAULT);
 
   // Add channel and is_group columns if they don't exist (migration for existing DBs)
   try {
