@@ -4,7 +4,7 @@
  * Starts alongside the main process and exposes read-only data for the dashboard UI.
  *
  * Default port: 3001 (override with API_PORT env var)
- * CORS: open (local network only, no auth by design)
+ * CORS: restricted to http://localhost:4200 (Angular dev server)
  *
  * Endpoints:
  *   GET /api/health
@@ -20,12 +20,14 @@ import path from 'path';
 
 import { GROUPS_DIR } from './config.js';
 import { getAllRegisteredGroups, getAllTasks, getRecentMessages } from './db.js';
+import { isValidGroupFolder } from './group-folder.js';
 import { logger } from './logger.js';
 
 const API_PORT = parseInt(process.env.API_PORT || '3001', 10);
+const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/; // YYYY-MM
 
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': 'http://localhost:4200',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
@@ -116,6 +118,10 @@ export function startApiServer(): void {
       // /api/groups/:folder/*
       if (parts[0] === 'api' && parts[1] === 'groups' && parts[2]) {
         const folder = parts[2];
+        if (!isValidGroupFolder(folder)) {
+          notFound(res);
+          return;
+        }
         const sub = parts[3];
 
         // GET /api/groups/:folder/messages?limit=50
@@ -130,6 +136,10 @@ export function startApiServer(): void {
         if (sub === 'usage') {
           const month = url.searchParams.get('month');
           if (month) {
+            if (!MONTH_PATTERN.test(month)) {
+              json(res, { error: 'Invalid month format, expected YYYY-MM' }, 400);
+              return;
+            }
             json(res, readUsageFile(folder, month));
           } else {
             json(res, readAllMonthsUsage(folder));
@@ -151,8 +161,8 @@ export function startApiServer(): void {
     }
   });
 
-  server.listen(API_PORT, '0.0.0.0', () => {
-    logger.info({ port: API_PORT }, `API server listening on http://0.0.0.0:${API_PORT}`);
+  server.listen(API_PORT, '127.0.0.1', () => {
+    logger.info({ port: API_PORT }, `API server listening on http://127.0.0.1:${API_PORT}`);
   });
 
   server.on('error', (err) => {
