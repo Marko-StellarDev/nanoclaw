@@ -7,34 +7,40 @@ import { ApiService, Task, Group, NewTask } from '../../services/api.service';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <!-- Header -->
-    <div class="header-row">
-      <h1 class="page-title">Scheduled Tasks</h1>
+    <div class="page-header">
+      <div class="page-title-block">
+        <span class="page-prefix">// 03</span>
+        <h1 class="page-title">TASK SCHEDULER</h1>
+      </div>
       <button class="new-btn" (click)="showForm = !showForm">
-        {{ showForm ? '✕ Cancel' : '＋ New Task' }}
+        <span class="btn-icon">{{ showForm ? '✕' : '+' }}</span>
+        <span>{{ showForm ? 'CANCEL' : 'NEW DIRECTIVE' }}</span>
       </button>
     </div>
 
     <!-- Create form -->
     <div class="card form-card" *ngIf="showForm">
-      <div class="form-title">Create Scheduled Task</div>
+      <div class="form-header">
+        <span class="form-title-prefix">// NEW</span>
+        <span class="form-title">SCHEDULED DIRECTIVE</span>
+      </div>
       <div class="form-grid">
         <div class="form-group">
-          <label>Group</label>
+          <label>TARGET NODE</label>
           <select (change)="form.group_folder = $any($event.target).value">
-            <option value="">Select group…</option>
+            <option value="">Select group...</option>
             <option *ngFor="let g of groups" [value]="g.folder">{{ g.name }}</option>
           </select>
         </div>
         <div class="form-group">
-          <label>Context Mode</label>
+          <label>CONTEXT MODE</label>
           <select (change)="form.context_mode = $any($event.target).value">
-            <option value="isolated">isolated (fresh session)</option>
-            <option value="group">group (with history)</option>
+            <option value="isolated">isolated — fresh session</option>
+            <option value="group">group — with history</option>
           </select>
         </div>
         <div class="form-group">
-          <label>Repeat</label>
+          <label>REPEAT PATTERN</label>
           <select (change)="onScheduleTypeChange($any($event.target).value)">
             <option value="cron">Recurring (cron)</option>
             <option value="interval">Recurring (every X)</option>
@@ -42,62 +48,62 @@ import { ApiService, Task, Group, NewTask } from '../../services/api.service';
           </select>
         </div>
         <div class="form-group">
-          <label>When to run</label>
-          <!-- cron or interval: preset dropdown -->
+          <label>EXECUTION TIME</label>
           <select *ngIf="form.schedule_type !== 'once'"
                   (change)="onPresetChange($any($event.target).value)">
-            <option value="">Choose…</option>
+            <option value="">Choose preset...</option>
             <option *ngFor="let p of schedulePresets" [value]="p.value">{{ p.label }}</option>
           </select>
-          <!-- custom free-text fallback -->
           <input *ngIf="showCustomInput"
                  type="text"
                  class="custom-input"
                  [placeholder]="form.schedule_type === 'cron' ? 'e.g. 0 9 * * 1-5' : 'milliseconds, e.g. 3600000'"
                  [value]="form.schedule_value"
                  (input)="form.schedule_value = $any($event.target).value" />
-          <!-- once: date+time picker -->
           <input *ngIf="form.schedule_type === 'once'"
                  type="datetime-local"
                  [min]="minDateTime"
                  (change)="onDateTimeChange($any($event.target).value)" />
         </div>
         <div class="form-group full-width">
-          <label>Prompt</label>
+          <label>DIRECTIVE PROMPT</label>
           <textarea
             rows="3"
-            placeholder="What should the agent do?"
+            placeholder="Describe what the agent should do..."
             [value]="form.prompt"
             (input)="form.prompt = $any($event.target).value"
           ></textarea>
         </div>
       </div>
       <div class="form-actions">
-        <span class="form-error" *ngIf="formError">{{ formError }}</span>
+        <span class="form-error" *ngIf="formError">&gt; ERROR: {{ formError }}</span>
         <button class="submit-btn" (click)="submitForm()" [disabled]="submitting">
-          {{ submitting ? 'Creating…' : 'Create Task' }}
+          <span *ngIf="!submitting">▶ QUEUE DIRECTIVE</span>
+          <span *ngIf="submitting">◌ PROCESSING...</span>
         </button>
       </div>
     </div>
 
-    <!-- Tasks table -->
-    <div *ngIf="loading" class="loading">Loading tasks...</div>
+    <!-- Loading -->
+    <div *ngIf="loading" class="stream-loading">&gt; loading directives...</div>
 
-    <div *ngIf="!loading && tasks.length === 0" class="card empty">
-      No scheduled tasks yet. Create one above.
+    <!-- Empty -->
+    <div *ngIf="!loading && tasks.length === 0" class="card">
+      <div class="empty">NO ACTIVE DIRECTIVES &nbsp;·&nbsp; USE + NEW DIRECTIVE TO BEGIN</div>
     </div>
 
+    <!-- Task table -->
     <div *ngIf="!loading && tasks.length > 0" class="card">
       <table>
         <thead>
           <tr>
-            <th>Group</th>
-            <th>Prompt</th>
-            <th>Schedule</th>
-            <th>Next Run</th>
-            <th>Last Run</th>
-            <th>Status</th>
-            <th>Actions</th>
+            <th>NODE</th>
+            <th>DIRECTIVE</th>
+            <th>SCHEDULE</th>
+            <th>NEXT EXEC</th>
+            <th>LAST EXEC</th>
+            <th>STATE</th>
+            <th>CMD</th>
           </tr>
         </thead>
         <tbody>
@@ -105,172 +111,297 @@ import { ApiService, Task, Group, NewTask } from '../../services/api.service';
             <td><span class="tag">{{ t.group_folder }}</span></td>
             <td class="prompt-cell" [title]="t.prompt">{{ t.prompt | slice:0:80 }}{{ t.prompt.length > 80 ? '…' : '' }}</td>
             <td class="schedule-cell">
-              <span class="schedule-english">{{ scheduleLabel(t) }}</span>
+              <div class="schedule-label">{{ scheduleLabel(t) }}</div>
               <span class="tag small">{{ t.schedule_type }}</span>
             </td>
             <td class="mono small">{{ t.next_run ? (t.next_run | date:'dd MMM HH:mm') : '—' }}</td>
             <td class="mono small">{{ t.last_run ? (t.last_run | date:'dd MMM HH:mm') : '—' }}</td>
-            <td><span class="badge" [class]="t.status">{{ t.status }}</span></td>
+            <td><span class="badge" [class]="t.status">{{ t.status.toUpperCase() }}</span></td>
             <td class="actions-cell">
-              <button class="action-btn pause" *ngIf="t.status === 'active'" (click)="pause(t)" title="Pause">⏸</button>
-              <button class="action-btn resume" *ngIf="t.status === 'paused'" (click)="resume(t)" title="Resume">▶</button>
-              <button class="action-btn cancel" (click)="cancel(t)" title="Delete">✕</button>
+              <button class="cmd-btn pause-btn" *ngIf="t.status === 'active'" (click)="pause(t)" title="Pause">⏸</button>
+              <button class="cmd-btn resume-btn" *ngIf="t.status === 'paused'" (click)="resume(t)" title="Resume">▶</button>
+              <button class="cmd-btn cancel-btn" (click)="cancel(t)" title="Delete">✕</button>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <div class="summary" *ngIf="!loading && tasks.length > 0">
-      <span class="tag">{{ activeTasks }} active</span>
-      <span class="tag">{{ pausedTasks }} paused</span>
-      <span class="tag">{{ tasks.length }} total</span>
+    <!-- Summary -->
+    <div class="summary-bar" *ngIf="!loading && tasks.length > 0">
+      <span class="sum-item active-sum">{{ activeTasks }} ACTIVE</span>
+      <span class="sum-sep">·</span>
+      <span class="sum-item paused-sum">{{ pausedTasks }} PAUSED</span>
+      <span class="sum-sep">·</span>
+      <span class="sum-item">{{ tasks.length }} TOTAL</span>
     </div>
 
-    <!-- Last result expand -->
+    <!-- Last result panel -->
     <div class="card result-card" *ngIf="selectedTask">
       <div class="result-header">
-        <span class="section-title">Last Result — {{ selectedTask.group_folder }}</span>
+        <div class="result-title">
+          <span class="result-prefix">// LAST RESULT</span>
+          <span class="result-node">{{ selectedTask.group_folder }}</span>
+        </div>
         <button class="close-btn" (click)="selectedTask = null">✕</button>
       </div>
-      <pre class="result-text">{{ selectedTask.last_result || 'No result yet.' }}</pre>
+      <pre class="result-text">{{ selectedTask.last_result || '> no result recorded.' }}</pre>
     </div>
   `,
   styles: [`
-    .header-row {
+    .page-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 20px;
+      margin-bottom: 28px;
     }
-    .page-title { font-size: 20px; font-weight: 700; }
+
+    .page-title-block {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .page-prefix {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--cyan);
+      opacity: 0.6;
+      letter-spacing: 0.08em;
+    }
+
+    .page-title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: #fff;
+    }
 
     .new-btn {
-      background: var(--accent);
-      border: none;
-      color: #fff;
-      padding: 7px 14px;
-      border-radius: 6px;
-      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0,200,255,0.08);
+      border: 1px solid rgba(0,200,255,0.3);
+      border-radius: 2px;
+      color: var(--cyan);
+      padding: 8px 16px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      letter-spacing: 0.1em;
       cursor: pointer;
-      transition: opacity 0.15s;
-      &:hover { opacity: 0.85; }
+      transition: all 0.2s;
+
+      &:hover {
+        background: rgba(0,200,255,0.15);
+        box-shadow: 0 0 16px rgba(0,200,255,0.15);
+      }
     }
 
-    /* Create form */
+    .btn-icon { font-size: 14px; }
+
+    /* Form */
     .form-card { margin-bottom: 20px; }
-    .form-title { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+
+    .form-header {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .form-title-prefix {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--cyan);
+      opacity: 0.6;
+    }
+
+    .form-title {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: var(--text);
+    }
 
     .form-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      gap: 14px;
       margin-bottom: 16px;
     }
 
     .form-group {
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 6px;
 
       &.full-width { grid-column: 1 / -1; }
 
-      label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
-
-      input, select, textarea {
-        background: var(--bg);
-        border: 1px solid var(--border);
-        border-radius: 5px;
-        color: var(--text);
-        font-size: 13px;
-        padding: 6px 10px;
-        font-family: inherit;
-        &:focus { outline: none; border-color: var(--accent); }
+      label {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        letter-spacing: 0.16em;
+        color: var(--text-muted);
       }
-      textarea { resize: vertical; }
+
+      select, input, textarea {
+        width: 100%;
+        &:focus { border-color: var(--cyan); }
+      }
+
+      textarea { resize: vertical; min-height: 72px; }
       .custom-input { margin-top: 6px; }
-
-      input[type="datetime-local"] {
-        color-scheme: dark;
-      }
     }
 
     .form-actions {
       display: flex;
       align-items: center;
       justify-content: flex-end;
-      gap: 12px;
+      gap: 14px;
     }
 
-    .form-error { font-size: 12px; color: var(--danger); }
+    .form-error {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--danger);
+      letter-spacing: 0.04em;
+    }
 
     .submit-btn {
-      background: var(--accent);
-      border: none;
-      color: #fff;
-      padding: 7px 16px;
-      border-radius: 6px;
-      font-size: 13px;
+      background: rgba(0,200,255,0.12);
+      border: 1px solid rgba(0,200,255,0.35);
+      border-radius: 2px;
+      color: var(--cyan);
+      padding: 8px 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
       cursor: pointer;
-      &:disabled { opacity: 0.5; cursor: default; }
-      &:hover:not(:disabled) { opacity: 0.85; }
+      transition: all 0.2s;
+
+      &:disabled { opacity: 0.4; cursor: default; }
+
+      &:hover:not(:disabled) {
+        background: rgba(0,200,255,0.2);
+        box-shadow: 0 0 12px rgba(0,200,255,0.15);
+      }
     }
 
     /* Table */
-    .prompt-cell { max-width: 220px; font-size: 13px; color: var(--text-muted); cursor: default; }
-    .small { font-size: 11px; }
-
+    .prompt-cell { max-width: 220px; font-size: 12px; color: var(--text-muted); }
+    .small       { font-size: 11px; }
     .schedule-cell { white-space: nowrap; }
-    .schedule-english { display: block; font-size: 13px; margin-bottom: 4px; }
-    .summary { display: flex; gap: 8px; margin-top: 16px; }
+    .schedule-label { font-size: 12px; margin-bottom: 4px; }
 
     /* Action buttons */
     .actions-cell { white-space: nowrap; }
 
-    .action-btn {
+    .cmd-btn {
       background: none;
       border: 1px solid var(--border);
-      border-radius: 4px;
+      border-radius: 2px;
       color: var(--text-muted);
-      font-size: 12px;
-      padding: 3px 7px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      padding: 3px 8px;
       cursor: pointer;
       margin-right: 4px;
       transition: all 0.15s;
+      letter-spacing: 0.04em;
 
-      &.pause:hover  { border-color: var(--warn); color: var(--warn); }
-      &.resume:hover { border-color: var(--success); color: var(--success); }
-      &.cancel:hover { border-color: var(--danger); color: var(--danger); }
+      &.pause-btn:hover  { border-color: var(--warn);   color: var(--warn);   background: var(--warn-dim); }
+      &.resume-btn:hover { border-color: var(--green);  color: var(--green);  background: var(--green-dim); }
+      &.cancel-btn:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-dim); }
     }
 
-    /* Last result panel */
+    /* Summary */
+    .summary-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+    }
+
+    .sum-item { color: var(--text-muted); }
+    .active-sum { color: var(--green); }
+    .paused-sum { color: var(--warn); }
+    .sum-sep    { color: var(--border); }
+
+    /* Loading */
+    .stream-loading {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+      padding: 20px 0;
+    }
+
+    /* Result panel */
     .result-card { margin-top: 16px; }
+
     .result-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
     }
+
+    .result-title {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .result-prefix {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--cyan);
+      opacity: 0.6;
+    }
+
+    .result-node {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
     .close-btn {
       background: none;
       border: none;
       color: var(--text-muted);
       cursor: pointer;
-      font-size: 14px;
-      &:hover { color: var(--text); }
+      font-size: 13px;
+      padding: 2px 6px;
+      transition: color 0.15s;
+      &:hover { color: var(--danger); }
     }
+
     .result-text {
+      font-family: 'JetBrains Mono', monospace;
       font-size: 12px;
       color: var(--text);
       white-space: pre-wrap;
       word-break: break-word;
       max-height: 300px;
       overflow-y: auto;
-      background: var(--bg);
+      background: rgba(0,0,0,0.3);
       border: 1px solid var(--border);
-      border-radius: 5px;
-      padding: 10px;
+      border-radius: 2px;
+      padding: 12px;
       margin: 0;
+      line-height: 1.6;
+
+      &::-webkit-scrollbar { width: 4px; }
+      &::-webkit-scrollbar-thumb { background: rgba(0,200,255,0.2); border-radius: 2px; }
     }
   `],
 })
@@ -380,20 +511,16 @@ export class TasksComponent implements OnInit {
     if (parts.length !== 5) return cron;
     const [min, hr, dom, mon, dow] = parts;
 
-    // Every minute
     if (min === '*' && hr === '*' && dom === '*' && mon === '*' && dow === '*')
       return 'Every minute';
 
-    // Every N minutes: */N * * * *
     const minStep = min.match(/^\*\/(\d+)$/);
     if (minStep && hr === '*' && dom === '*' && mon === '*' && dow === '*')
       return `Every ${minStep[1]} min`;
 
-    // Every hour: 0 * * * *
     if (min === '0' && hr === '*' && dom === '*' && mon === '*' && dow === '*')
       return 'Every hour';
 
-    // Every N hours: 0 */N * * *
     const hrStep = hr.match(/^\*\/(\d+)$/);
     if (hrStep && dom === '*' && mon === '*' && dow === '*') {
       const m = parseInt(min);
@@ -401,34 +528,29 @@ export class TasksComponent implements OnInit {
       return `Every ${hrStep[1]} hr${suffix}`;
     }
 
-    // Has a fixed time: X Y ...
     const h = parseInt(hr), m = parseInt(min);
     if (!isNaN(h) && !isNaN(m) && mon === '*') {
       const time = this.fmtTime(h, m);
 
-      // Monthly: X Y D * *
       if (dow === '*' && dom !== '*') {
         const d = parseInt(dom);
         return !isNaN(d) ? `Monthly on the ${this.ordinal(d)} at ${time}` : cron;
       }
 
-      // Day-of-week patterns
       if (dom === '*') {
         if (dow === '*')                                    return `Daily at ${time}`;
         if (dow === '1-5' || dow === '1,2,3,4,5')          return `Weekdays at ${time}`;
         if (dow === '6,0' || dow === '0,6' || dow === '6') return `Weekends at ${time}`;
         const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-        // Single day
         const d = parseInt(dow);
         if (!isNaN(d) && d >= 0 && d <= 7) return `${names[d % 7]}s at ${time}`;
-        // Comma list of days
         const days = dow.split(',').map(Number);
         if (days.every(n => !isNaN(n) && n >= 0 && n <= 7))
           return `${days.map(n => names[n % 7]).join(', ')} at ${time}`;
       }
     }
 
-    return cron; // fall back to raw for unusual expressions
+    return cron;
   }
 
   private fmtTime(h: number, m: number): string {
@@ -476,7 +598,7 @@ export class TasksComponent implements OnInit {
 
   submitForm(): void {
     this.formError = '';
-    if (!this.form.group_folder) { this.formError = 'Select a group.'; return; }
+    if (!this.form.group_folder) { this.formError = 'Select a target node.'; return; }
     if (!this.form.prompt.trim()) { this.formError = 'Prompt is required.'; return; }
     if (!this.form.schedule_value.trim()) { this.formError = 'Schedule value is required.'; return; }
 
@@ -491,7 +613,7 @@ export class TasksComponent implements OnInit {
       },
       error: (err) => {
         this.submitting = false;
-        this.formError = err?.error?.error || 'Failed to create task.';
+        this.formError = err?.error?.error || 'Failed to create directive.';
       },
     });
   }
