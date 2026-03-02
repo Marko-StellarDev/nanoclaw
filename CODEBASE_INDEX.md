@@ -57,7 +57,7 @@
 
 ### Multi-Machine Deployment
 - **Development:** M1 MacBook Pro with Apple Container (arm64) + DEV token
-- **Production:** Intel MacBook Pro with Docker Desktop (amd64, 2 CPU / 4GB) + PROD token
+- **Production:** Intel MacBook Pro running Ubuntu 24.04 Desktop, Docker Engine (amd64) + PROD token
 - **Deployment Script:** `deploy.sh` - DB backup, git pull, deps, container rebuild, service restart
 - **Documentation:** `SLACK_SETUP.md` and `INTEL_SETUP.md` for complete setup
 
@@ -356,15 +356,21 @@ Container (per group)
 
 ### Container Image
 
-**`container/Dockerfile` (69 lines)**
+**`container/Dockerfile` (~80 lines)**
 - Base: `node:22-slim`
-- Installed: Chromium + deps, git, curl, `agent-browser`, `@anthropic-ai/claude-code`
+- Installed: Chromium + deps, git, curl, python3, python3-pip, `agent-browser`, `@anthropic-ai/claude-code`, `playwright` (npm), `playwright` (pip)
+- **Browser env vars:** `AGENT_BROWSER_EXECUTABLE_PATH`, `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` both point to `/usr/bin/chromium`; `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` prevents redundant browser downloads
+- **Three browser automation options available to agents:**
+  1. `agent-browser` CLI — simple tasks (open, click, fill, screenshot)
+  2. Node.js `playwright` — complex scripts (loops, multi-tab, network interception, PDF)
+  3. Python `playwright` — data-heavy tasks (CSV export, pandas, async multi-page)
 - **Entrypoint:**
   1. Recompile agent-runner from writable copy
   2. Read stdin JSON to `/tmp/input.json`
   3. Run agent: `node /tmp/dist/index.js < /tmp/input.json`
 - Workspace: `/workspace/group/` (working directory)
 - User: `node` (non-root, uid 1000)
+- Image size: ~2.26GB
 
 **`container/build.sh` (24 lines)**
 - Build `nanoclaw-agent:latest`
@@ -407,15 +413,14 @@ Container (per group)
 
 ### Container Skills
 
-**`container/skills/agent-browser/SKILL.md` (160 lines)**
-- Browser automation via `agent-browser` CLI
-- **Workflow:**
-  1. `agent-browser open <url>`
-  2. `agent-browser snapshot -i` → get refs (@e1, @e2)
-  3. `agent-browser click @e1`, `agent-browser fill @e2 "text"`
-  4. Re-snapshot after navigation
-- **Commands:** Navigate, snapshot, interact, screenshot, wait, cookies, eval
-- **Auth:** Save/load browser state
+**`container/skills/agent-browser/SKILL.md`**
+- Three browser automation tiers — agent picks based on task complexity:
+  - **`agent-browser` CLI** — navigate, snapshot, click, fill, screenshot, wait, cookies, eval, save/load auth state
+  - **Node.js Playwright** — full scripting: multi-tab, network interception, request mocking, video, PDF, persistent sessions
+  - **Python Playwright** — data-heavy: table→CSV, pandas integration, async multi-page scraping
+- All three use system Chromium (`/usr/bin/chromium`) — no separate browser install
+- Chromium args required in scripts: `--no-sandbox --disable-setuid-sandbox`
+- Auth state saved to `/workspace/group/browser-auth.json` persists across container restarts
 
 ---
 
@@ -496,8 +501,8 @@ Container (per group)
 ### Environment Variables (`.env`)
 ```
 # Slack Bot Tokens
-SLACK_BOT_TOKEN=xoxb-...               # Production Bot User OAuth Token (Intel Mac)
-SLACK_APP_TOKEN=xapp-...               # Production App-Level Token (Intel Mac)
+SLACK_BOT_TOKEN=xoxb-...               # Production Bot User OAuth Token (Ubuntu prod)
+SLACK_APP_TOKEN=xapp-...               # Production App-Level Token (Ubuntu prod)
 DEV_SLACK_BOT_TOKEN=xoxb-...           # Development Bot Token (M1 Mac)
 DEV_SLACK_APP_TOKEN=xapp-...           # Development App Token (M1 Mac)
 
@@ -509,7 +514,7 @@ ASSISTANT_HAS_OWN_NUMBER=true          # Always true for Slack bots
 CONTAINER_IMAGE=nanoclaw-agent:latest  # Container image name
 CONTAINER_TIMEOUT=1800000              # 30min max runtime
 IDLE_TIMEOUT=1800000                   # 30min idle timeout
-MAX_CONCURRENT_CONTAINERS=5            # Concurrency limit (2 for Intel Mac)
+MAX_CONCURRENT_CONTAINERS=5            # Concurrency limit (2 for prod machine)
 
 # Other Settings
 LOG_LEVEL=info                         # Pino log level
@@ -615,7 +620,7 @@ nanoclaw/
 │   ├── ipc.ts                    # IPC watcher
 │   └── task-scheduler.ts         # Scheduler
 ├── scripts/                      # Operational scripts
-│   └── watchdog.sh               # Health-check + auto-restart (launchd, 5 min)
+│   └── watchdog.sh               # Health-check + auto-restart (cross-platform: launchd/systemd, 5 min)
 ├── container/                    # Container image
 │   ├── Dockerfile                # Image definition
 │   ├── agent-runner/             # Container-side agent
@@ -647,7 +652,7 @@ nanoclaw/
 ├── logs/                         # Application logs
 ├── docs/                         # Documentation
 ├── SLACK_SETUP.md                # Slack bot setup guide
-├── INTEL_SETUP.md                # Intel Mac production setup
+├── INTEL_SETUP.md                # Production setup (Ubuntu 24.04 on Intel Mac)
 ├── deploy.sh                     # Deployment script (git pull, backup, restart)
 ├── package.json
 └── .env                          # Secrets (gitignored)

@@ -1,10 +1,24 @@
 ---
 name: agent-browser
 description: Browse the web for any task — research topics, read articles, interact with web apps, fill forms, take screenshots, extract data, and test web pages. Use whenever a browser would be useful, not just when the user explicitly asks.
-allowed-tools: Bash(agent-browser:*)
+allowed-tools: Bash(agent-browser:*), Bash(node:*), Bash(python3:*)
 ---
 
-# Browser Automation with agent-browser
+# Browser Automation
+
+Three options available — choose based on complexity:
+
+| Tool | Best for |
+|------|---------|
+| `agent-browser` CLI | Simple tasks: open page, click, fill, screenshot |
+| Node.js + Playwright | Complex automations: loops, error handling, multi-tab, network interception |
+| Python + Playwright | Data-heavy tasks: parsing, spreadsheets, pandas, combined with browser |
+
+All three use the same system Chromium — no extra setup needed.
+
+---
+
+# agent-browser CLI
 
 ## Quick start
 
@@ -156,4 +170,172 @@ agent-browser snapshot -i
 agent-browser get text @e1  # Get product title
 agent-browser get attr @e2 href  # Get link URL
 agent-browser screenshot products.png
+```
+
+---
+
+# Node.js Playwright (full scripting)
+
+Use when a task needs loops, error handling, multi-tab, network interception, or anything too complex for CLI commands.
+
+## Quick start
+
+Write a script and run it with `node`:
+
+```bash
+cat > /tmp/scrape.js << 'EOF'
+const { chromium } = require('playwright');
+
+(async () => {
+  const browser = await chromium.launch({
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  const page = await browser.newPage();
+
+  await page.goto('https://example.com');
+  const title = await page.title();
+  console.log('Title:', title);
+
+  await browser.close();
+})();
+EOF
+node /tmp/scrape.js
+```
+
+## Common patterns
+
+### Login and save session
+```javascript
+const { chromium } = require('playwright');
+const browser = await chromium.launch({
+  executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+  args: ['--no-sandbox', '--disable-setuid-sandbox']
+});
+const context = await browser.newContext();
+const page = await context.newPage();
+
+await page.goto('https://app.example.com/login');
+await page.fill('#email', 'user@example.com');
+await page.fill('#password', 'secret');
+await page.click('button[type=submit]');
+await page.waitForURL('**/dashboard');
+
+// Save session for reuse
+await context.storageState({ path: '/workspace/group/browser-auth.json' });
+await browser.close();
+```
+
+### Reuse saved session
+```javascript
+const context = await browser.newContext({
+  storageState: '/workspace/group/browser-auth.json'
+});
+```
+
+### Multi-tab workflow
+```javascript
+const page1 = await context.newPage();
+const page2 = await context.newPage();
+await page1.goto('https://site.com/list');
+// extract links, open each in page2, scrape data
+```
+
+### Intercept network requests
+```javascript
+await page.route('**/api/**', route => {
+  console.log('API call:', route.request().url());
+  route.continue();
+});
+```
+
+### Extract table data
+```javascript
+const rows = await page.$$eval('table tr', rows =>
+  rows.map(r => Array.from(r.querySelectorAll('td')).map(td => td.innerText))
+);
+console.log(JSON.stringify(rows));
+```
+
+### Screenshot / PDF
+```javascript
+await page.screenshot({ path: '/workspace/group/report.png', fullPage: true });
+await page.pdf({ path: '/workspace/group/report.pdf', format: 'A4' });
+```
+
+---
+
+# Python Playwright (data-heavy tasks)
+
+Use when you need to combine browser automation with data processing (pandas, csv, json manipulation, etc.).
+
+## Quick start
+
+```bash
+cat > /tmp/scrape.py << 'EOF'
+import os
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(
+        executable_path=os.environ['PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH'],
+        args=['--no-sandbox', '--disable-setuid-sandbox']
+    )
+    page = browser.new_page()
+    page.goto('https://example.com')
+    print(page.title())
+    browser.close()
+EOF
+python3 /tmp/scrape.py
+```
+
+## Common patterns
+
+### Extract table to CSV
+```python
+import csv, os
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(
+        executable_path=os.environ['PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH'],
+        args=['--no-sandbox', '--disable-setuid-sandbox']
+    )
+    page = browser.new_page()
+    page.goto('https://example.com/report')
+
+    rows = page.eval_on_selector_all('table tr', '''rows =>
+        rows.map(r => [...r.querySelectorAll("td,th")].map(c => c.innerText))
+    ''')
+
+    with open('/workspace/group/report.csv', 'w', newline='') as f:
+        csv.writer(f).writerows(rows)
+
+    browser.close()
+    print(f"Saved {len(rows)} rows")
+```
+
+### Login with saved session
+```python
+context = browser.new_context(storage_state='/workspace/group/browser-auth.json')
+# or save: context.storage_state(path='/workspace/group/browser-auth.json')
+```
+
+### Async variant (for concurrent pages)
+```python
+import asyncio
+from playwright.async_api import async_playwright
+
+async def main():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            executable_path=os.environ['PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH'],
+            args=['--no-sandbox', '--disable-setuid-sandbox']
+        )
+        page = await browser.new_page()
+        await page.goto('https://example.com')
+        print(await page.title())
+        await browser.close()
+
+asyncio.run(main())
 ```

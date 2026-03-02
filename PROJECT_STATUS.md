@@ -36,9 +36,9 @@
    - `DEV_SLACK_BOT_TOKEN` + `DEV_SLACK_APP_TOKEN`
 
 2. **Intel MacBook Pro i5 2016 (Production/Always-On)**
-   - Docker Desktop (amd64, 2 CPU / 4GB RAM limit)
+   - Ubuntu 24.04 LTS Desktop, Docker Engine (amd64)
    - `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN`
-   - Runs 24/7 via launchd
+   - Runs 24/7 via systemd
    - Deploy with `./deploy.sh`
 
 ### Registered Groups
@@ -128,6 +128,25 @@
 
 ---
 
+## SESSION 11 ADDITIONS ✅ (2026-03-03)
+
+### Production Machine: Ubuntu 24.04 LTS Desktop
+- Intel Mac 2016 switched from macOS to Ubuntu 24.04 LTS Desktop
+- Docker Engine replaces Docker Desktop (no resource limits to configure, ~200MB vs 2GB overhead)
+- Service management: systemd replaces launchd
+- `scripts/watchdog.sh` made cross-platform: detects OS, uses `systemctl --user restart nanoclaw` on Linux, `launchctl kickstart` on macOS
+- `INTEL_SETUP.md` fully rewritten for Ubuntu (Docker Engine, Node via apt, systemd service + watchdog timer)
+- `docs/INTEL_QUICKSTART.md` created: word-by-word Claude Code session guide for Intel Mac setup
+
+### Enhanced Browser Automation
+- **Node.js Playwright** added to container: `npm install -g playwright` with `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`
+- **Python 3 + Playwright** added to container: `python3`, `python3-pip`, `pip3 install playwright`
+- All three options use system Chromium (`/usr/bin/chromium`) — no redundant browser downloads
+- `container/skills/agent-browser/SKILL.md` updated with full Node.js and Python Playwright examples
+- Container image size: ~2.26GB (up from ~1.2GB)
+
+---
+
 ## SESSION 10 ADDITIONS ✅ (2026-03-02)
 
 ### Task Run History
@@ -186,8 +205,9 @@ nanoclaw/
 │   │       └── audit/        # Audit log (messages + tasks + tool activity)
 ├── CODEBASE_INDEX.md         # Architecture reference
 ├── SLACK_SETUP.md            # Slack bot setup guide
-├── INTEL_SETUP.md            # Production deployment guide
-└── deploy.sh                 # Intel Mac deployment script
+├── INTEL_SETUP.md            # Production deployment guide (Ubuntu 24.04)
+├── docs/INTEL_QUICKSTART.md  # Word-by-word Claude Code setup guide
+└── deploy.sh                 # Deployment script (git pull, backup, restart)
 ```
 
 ---
@@ -211,7 +231,7 @@ Container build (`./container/build.sh`) works correctly.
 ## TECHNICAL CONSTRAINTS
 
 - **M1 dev:** Apple Container (arm64)
-- **Intel prod:** Docker Desktop (amd64, 2 CPU / 4GB RAM)
+- **Intel prod:** Ubuntu 24.04 Desktop, Docker Engine (amd64)
 - All containers must be multi-arch compatible
 - Node 22, TypeScript throughout
 - Anthropic SDK only — no third-party AI providers
@@ -249,7 +269,7 @@ SLACK_APP_TOKEN=xapp-...
 ASSISTANT_NAME=StellarBot
 ANTHROPIC_API_KEY=sk-ant-api03-...
 CONTAINER_IMAGE=nanoclaw-agent:latest
-MAX_CONCURRENT_CONTAINERS=5       # 2 for Intel Mac
+MAX_CONCURRENT_CONTAINERS=5       # 2 for prod machine
 TZ=Africa/Johannesburg
 LOG_LEVEL=info
 MONTHLY_TOKEN_BUDGET=500000
@@ -277,7 +297,7 @@ pgrep -f "nanoclaw-agent"
 ./container/build.sh           # rebuild if needed
 ```
 
-### Container issues (Intel)
+### Container issues (prod/Ubuntu)
 ```bash
 docker ps
 docker images | grep nanoclaw
@@ -334,7 +354,7 @@ npm install && npm run build
 ### Session 10 — Task history, File uploads, Watchdog (2026-03-02)
 - **Task run history:** `GET /api/tasks/:id/runs` + `getTaskRunLogs()` in db.ts; Tasks page shows ◷ button per row → expandable sub-row with run table (time, duration, status badge, result snippet)
 - **Slack file uploads:** `slack.ts` handles `file_share` subtype + `files[]` on any message; downloads to `groups/{folder}/uploads/` (50MB cap, sanitised filenames); agent sees `[Attached file: name → /workspace/group/uploads/name]`
-- **Watchdog:** `scripts/watchdog.sh` — single-shot health check vs `/api/health`, 3-failure threshold, state file, restarts via `launchctl kickstart`; `INTEL_SETUP.md` updated with plist template
+- **Watchdog:** `scripts/watchdog.sh` — single-shot health check vs `/api/health`, 3-failure threshold, state file, cross-platform (launchctl on macOS, systemctl on Linux); `INTEL_SETUP.md` updated with systemd timer template
 
 ### Session 9 — Analytics + UI Redesign (2026-03-02)
 - Complete sci-fi "neural interface" redesign of Angular UI

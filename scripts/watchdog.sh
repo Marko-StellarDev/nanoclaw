@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# NanoClaw Watchdog — single-shot health check, designed to run every 5 min via launchd.
+# NanoClaw Watchdog — single-shot health check, runs every 5 min via launchd (macOS) or systemd timer (Linux).
 # Tracks consecutive failures in a state file; restarts the service after 3 failures.
 #
 # Setup: see INTEL_SETUP.md "Watchdog Setup" section.
@@ -9,6 +9,13 @@ set -euo pipefail
 HEALTH_URL="http://127.0.0.1:3001/api/health"
 SERVICE_LABEL="com.nanoclaw"
 NANOCLAW_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Detect platform
+if [[ "$(uname)" == "Darwin" ]]; then
+  PLATFORM="macos"
+else
+  PLATFORM="linux"
+fi
 LOG_FILE="${NANOCLAW_DIR}/logs/watchdog.log"
 STATE_FILE="${NANOCLAW_DIR}/logs/watchdog.state"
 MAX_FAILURES=3
@@ -33,8 +40,13 @@ else
 
   if [ "$FAILURES" -ge "$MAX_FAILURES" ]; then
     log "Restarting service: ${SERVICE_LABEL}"
-    launchctl kickstart -k "gui/$(id -u)/${SERVICE_LABEL}" >> "$LOG_FILE" 2>&1 || \
-      log "WARNING: launchctl kickstart failed — service may need manual restart"
+    if [[ "$PLATFORM" == "macos" ]]; then
+      launchctl kickstart -k "gui/$(id -u)/${SERVICE_LABEL}" >> "$LOG_FILE" 2>&1 || \
+        log "WARNING: launchctl kickstart failed — service may need manual restart"
+    else
+      systemctl --user restart nanoclaw >> "$LOG_FILE" 2>&1 || \
+        log "WARNING: systemctl restart failed — service may need manual restart"
+    fi
     echo "0" > "$STATE_FILE"
     log "Restart triggered"
   fi

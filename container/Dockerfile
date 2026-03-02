@@ -3,7 +3,7 @@
 
 FROM node:22-slim
 
-# Install system dependencies for Chromium
+# Install system dependencies for Chromium + Python
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
@@ -24,14 +24,21 @@ RUN apt-get update && apt-get install -y \
     libxshmfence1 \
     curl \
     git \
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# Set Chromium path for agent-browser
+# Set Chromium path for agent-browser and Playwright (both Node and Python)
+# PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD prevents Playwright from downloading its own Chromium
 ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
-# Install agent-browser and claude-code globally
-RUN npm install -g agent-browser @anthropic-ai/claude-code
+# Install agent-browser, claude-code, and Playwright for Node.js globally
+RUN npm install -g agent-browser @anthropic-ai/claude-code playwright
+
+# Install Playwright for Python (uses system Chromium via env var above)
+RUN pip3 install playwright --break-system-packages
 
 # Create app directory
 WORKDIR /app

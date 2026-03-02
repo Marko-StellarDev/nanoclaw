@@ -1,164 +1,114 @@
-# Intel Mac Production Setup Guide
+# Production Setup Guide — Ubuntu 24.04 LTS Desktop on Intel Mac
 
-This guide covers the one-time setup required for your **2016 Intel MacBook Pro i5** to run NanoClaw 24/7 as a production deployment.
+This guide covers the one-time setup for running NanoClaw 24/7 on the **2016 Intel MacBook Pro i5** running **Ubuntu 24.04 LTS Desktop**.
 
 ## Overview
 
-Your production setup:
-- **Machine:** 2016 Intel MacBook Pro i5
-- **Container Runtime:** Docker Desktop (2 CPU / 4GB RAM limit)
-- **Architecture:** amd64 (x86_64)
-- **Purpose:** Production 24/7 deployment via launchd
-- **Tokens:** SLACK_BOT_TOKEN and SLACK_APP_TOKEN (production bot)
+| | |
+|---|---|
+| **Machine** | 2016 Intel MacBook Pro i5 (8GB RAM) |
+| **OS** | Ubuntu 24.04 LTS Desktop |
+| **Container Runtime** | Docker Engine (Linux, no Docker Desktop needed) |
+| **Architecture** | amd64 (x86_64) |
+| **Service Manager** | systemd |
+| **Tokens** | `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` (production bot) |
 
 ## Prerequisites
 
 Before starting, ensure you have:
-- [ ] macOS installed and updated
+- [ ] Ubuntu 24.04 LTS Desktop installed (see install notes below)
 - [ ] Admin access to the machine
 - [ ] GitHub credentials (to pull the repo)
-- [ ] Slack production bot tokens (Bot Token and App Token - see SLACK_SETUP.md)
+- [ ] Slack production bot tokens (Bot Token and App Token — see SLACK_SETUP.md)
 - [ ] Anthropic API key
 
 ---
 
-## Step 1: Install Homebrew
+## Ubuntu Install Notes
 
-Homebrew is needed for installing Node.js and other dependencies.
+Download Ubuntu 24.04 LTS Desktop ISO from https://ubuntu.com/download/desktop and flash to USB (use Balena Etcher on your M1).
+
+Boot Intel Mac from USB: hold **Option** at startup, select the USB drive.
+
+During install:
+- Check **"Install third-party software for graphics and Wi-Fi"** — handles Broadcom Wi-Fi automatically
+- Enable automatic login if this machine won't have a keyboard/monitor permanently attached
+
+After install, open Terminal (`Ctrl+Alt+T`).
+
+---
+
+## Step 1: Install Docker Engine
+
+Docker Engine on Linux needs no Docker Desktop — it runs as a system service with no resource limits to configure manually.
 
 ```bash
-# Install Homebrew
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+```
 
-# Verify installation
-brew --version
+**Log out and back in** (or reboot) so the group change takes effect. Then verify:
+
+```bash
+docker ps  # Should show empty list, no "permission denied"
 ```
 
 ---
 
-## Step 2: Install Node.js
-
-NanoClaw requires Node.js 20 or later.
+## Step 2: Install Node.js 22
 
 ```bash
-# Install Node.js via Homebrew
-brew install node@22
-
-# Verify installation
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs
 node --version  # Should show v22.x.x
-npm --version   # Should show 10.x.x or later
-
-# If node command not found, add to PATH:
-echo 'export PATH="/usr/local/opt/node@22/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
+npm --version
 ```
 
 ---
 
-## Step 3: Install and Configure Docker Desktop
-
-### Install Docker Desktop
-
-1. **Download Docker Desktop for Mac (Intel chip):**
-   - Visit: https://www.docker.com/products/docker-desktop
-   - Download the **Intel chip** version
-   - Open the .dmg and drag Docker to Applications
-
-2. **Start Docker Desktop:**
-   - Open Docker from Applications
-   - Wait for it to start (whale icon in menu bar)
-   - Accept the service agreement
-
-### Configure Docker Resource Limits
-
-Your Intel Mac has limited resources, so we'll set conservative limits:
-
-1. **Open Docker Desktop preferences:**
-   - Click the whale icon in menu bar
-   - Click "Settings" or "Preferences"
-
-2. **Go to "Resources":**
-   - **CPUs:** Set to **2** (as specified)
-   - **Memory:** Set to **4 GB** (as specified)
-   - **Swap:** 1 GB (default)
-   - **Disk image size:** 60 GB (default, adjust if needed)
-
-3. **Click "Apply & Restart"**
-
-4. **Verify Docker is running:**
-   ```bash
-   docker --version
-   docker ps  # Should show empty list (no containers yet)
-   ```
-
----
-
-## Step 4: Clone the Repository
+## Step 3: Install Git and Clone the Repo
 
 ```bash
-# Navigate to your preferred location
+sudo apt-get install -y git
 cd ~
-
-# Clone the repository
-git clone https://github.com/qwibitai/nanoclaw.git
-
-# Or if you're using your fork:
-# git clone https://github.com/YOUR_USERNAME/nanoclaw.git
-
-# Navigate into the directory
+git clone https://github.com/YOUR_USERNAME/nanoclaw.git
 cd nanoclaw
-
-# Verify you're on the main branch
-git branch  # Should show: * main
 ```
 
 ---
 
-## Step 5: Install Dependencies
+## Step 4: Install Dependencies
 
 ```bash
-# Install Node dependencies
 npm install
-
-# This will install all packages from package.json
-# including @slack/bolt and other dependencies
 ```
 
 ---
 
-## Step 6: Configure Environment Variables
-
-Create your `.env` file with production configuration:
+## Step 5: Configure Environment Variables
 
 ```bash
-# Create .env file
 nano .env
 ```
 
-Add the following configuration:
+Add the following (fill in your real values):
 
 ```bash
-# ============================================================================
-# PRODUCTION CONFIGURATION FOR INTEL MAC
-# ============================================================================
-
 # Slack Tokens (PRODUCTION bot)
-# Get these from https://api.slack.com/apps - see SLACK_SETUP.md
-SLACK_BOT_TOKEN=xoxb-YOUR_PRODUCTION_BOT_TOKEN_HERE
-SLACK_APP_TOKEN=xapp-YOUR_PRODUCTION_APP_TOKEN_HERE
+SLACK_BOT_TOKEN=xoxb-YOUR_PRODUCTION_BOT_TOKEN
+SLACK_APP_TOKEN=xapp-YOUR_PRODUCTION_APP_TOKEN
 
 # Assistant Configuration
 ASSISTANT_NAME=StellarBot
-ASSISTANT_HAS_OWN_NUMBER=true
 
 # Anthropic API
-ANTHROPIC_API_KEY=sk-ant-api03-YOUR_KEY_HERE
+ANTHROPIC_API_KEY=sk-ant-api03-YOUR_KEY
 
 # Container Configuration
 CONTAINER_IMAGE=nanoclaw-agent:latest
-CONTAINER_TIMEOUT=1800000       # 30 minutes
-IDLE_TIMEOUT=1800000            # 30 minutes
-MAX_CONCURRENT_CONTAINERS=2     # Lower for Intel Mac resources
+CONTAINER_TIMEOUT=1800000
+IDLE_TIMEOUT=1800000
+MAX_CONCURRENT_CONTAINERS=2
 
 # Timezone
 TZ=Africa/Johannesburg
@@ -167,32 +117,23 @@ TZ=Africa/Johannesburg
 LOG_LEVEL=info
 ```
 
-**Important:**
-- Use `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` (not DEV_* versions) for production
-- Set `MAX_CONCURRENT_CONTAINERS=2` (not 5) due to resource limits
-- Replace `YOUR_PRODUCTION_BOT_TOKEN_HERE` with your Bot User OAuth Token (xoxb-...)
-- Replace `YOUR_PRODUCTION_APP_TOKEN_HERE` with your App-Level Token (xapp-...)
-- Replace `YOUR_KEY_HERE` with your Anthropic API key
+Save: `Ctrl+O`, `Enter`, `Ctrl+X`.
 
-Save and exit (Ctrl+O, Enter, Ctrl+X in nano).
+```bash
+chmod 600 .env
+```
 
 ---
 
-## Step 7: Build the Container
-
-Build the multi-arch container image:
+## Step 6: Build the Container
 
 ```bash
-# Build the container
 ./container/build.sh
+```
 
-# This will:
-# - Build the nanoclaw-agent:latest image for amd64
-# - Install Chromium and dependencies
-# - Set up the agent runtime
+Build takes 5–10 minutes on first run. Verify:
 
-# Build takes 5-10 minutes on first run
-# Verify the image is built:
+```bash
 docker images | grep nanoclaw
 ```
 
@@ -203,461 +144,238 @@ nanoclaw-agent   latest   abc123def456   2 minutes ago   1.2GB
 
 ---
 
-## Step 8: Initialize Database and Groups
-
-NanoClaw needs to initialize its database and group folders:
+## Step 7: Install Claude Code and Run Setup
 
 ```bash
-# Compile TypeScript
-npm run build
-
-# Initialize groups (this creates directories)
-mkdir -p groups/keb-ops groups/personal groups/global
-
-# Copy SOUL.md files if not already present
-# (They should be in the repo already from development)
-
-# Verify group structure:
-ls -la groups/
-# Should show: global, keb-ops, personal, main
+npm install -g @anthropic-ai/claude-code
+cd ~/nanoclaw
+claude
 ```
+
+In the Claude Code session, run:
+
+```
+/setup
+```
+
+The setup skill detects Linux and configures systemd automatically. See `docs/INTEL_QUICKSTART.md` for the full word-by-word guide to the setup conversation.
 
 ---
 
-## Step 9: Test Run (Optional but Recommended)
-
-Before setting up the service, do a test run:
+## Step 8: Verify Service
 
 ```bash
-# Run in development mode
-npm run dev
-
-# You should see:
-# [INFO] Connecting to Slack...
-# [INFO] Slack bot authenticated: userId=U123456, team=YourWorkspace, user=andy
-# [INFO] Slack channel connected successfully via Socket Mode
+systemctl --user status nanoclaw
+journalctl --user -u nanoclaw -f
 ```
 
-**Test from Slack:**
-1. Open Slack and find your production bot
-2. In a channel: Invite the bot (`/invite @StellarBot`), then send: `@StellarBot hello`
-3. In a DM: Open a DM with the bot and send: `@StellarBot hello`
-4. You should get a response
-
-Press Ctrl+C to stop after testing.
-
----
-
-## Step 10: Set Up launchd Service (Auto-Start)
-
-Configure NanoClaw to run automatically on boot via launchd:
-
-### Create the plist file:
-
-```bash
-# Create LaunchAgents directory if it doesn't exist
-mkdir -p ~/Library/LaunchAgents
-
-# Create the plist file
-nano ~/Library/LaunchAgents/com.nanoclaw.plist
-```
-
-Add the following content (replace `/Users/marko` with your actual username):
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.nanoclaw</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/usr/local/bin/node</string>
-        <string>/Users/marko/nanoclaw/dist/index.js</string>
-    </array>
-    <key>WorkingDirectory</key>
-    <string>/Users/marko/nanoclaw</string>
-    <key>StandardOutPath</key>
-    <string>/Users/marko/nanoclaw/logs/nanoclaw.log</string>
-    <key>StandardErrorPath</key>
-    <string>/Users/marko/nanoclaw/logs/nanoclaw.error.log</string>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
-    </dict>
-</dict>
-</plist>
-```
-
-Save and exit.
-
-### Create logs directory:
-
-```bash
-mkdir -p logs
-```
-
-### Load the service:
-
-```bash
-# Load the service
-launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
-
-# Verify it's running
-launchctl list | grep nanoclaw
-# Should show: com.nanoclaw
-
-# Check logs
-tail -f logs/nanoclaw.log
-```
-
----
-
-## Step 11: Verify Production Deployment
-
-### Check Service Status:
-
-```bash
-# List running services
-launchctl list | grep nanoclaw
-
-# View logs
-tail -f logs/nanoclaw.log
-
-# Check for errors
-tail -f logs/nanoclaw.error.log
-```
-
-### Test from Slack:
-
-1. Send message to production bot: `@StellarBot status`
-2. Verify response
-3. Check logs to see message processing
-
-### Verify Groups:
-
-Send from your KEB Ops channel:
-```
-@StellarBot which group am I in?
-```
-
-Send from personal DM:
-```
-@StellarBot which group am I in?
-```
-
-Each should correctly identify its group (keb-ops vs personal).
-
----
-
-## Step 12: Enable Automatic Restart on Reboot
-
-The launchd service is already configured to start on boot (RunAtLoad=true), but verify:
-
-```bash
-# Restart the Mac
-sudo reboot
-
-# After reboot, check if service started:
-launchctl list | grep nanoclaw
-
-# Check logs to see startup
-tail -f logs/nanoclaw.log
-```
+Send a message in your KEB ops Slack channel — you should get a response.
 
 ---
 
 ## Watchdog Setup (Auto-Recovery)
 
-The launchd `KeepAlive` setting restarts the bot if it **crashes**, but not if it **hangs** (process running, port 3001 not responding). The watchdog handles this case.
+The systemd `Restart=always` setting handles crashes. The watchdog handles hangs (process running, API not responding).
 
-### Create the watchdog plist:
-
-```bash
-nano ~/Library/LaunchAgents/com.nanoclaw.watchdog.plist
-```
-
-Add the following (replace `/Users/marko` with your actual username):
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.nanoclaw.watchdog</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/bin/bash</string>
-        <string>/Users/marko/nanoclaw/scripts/watchdog.sh</string>
-    </array>
-    <key>StartInterval</key>
-    <integer>300</integer>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/Users/marko/nanoclaw/logs/watchdog.log</string>
-    <key>StandardErrorPath</key>
-    <string>/Users/marko/nanoclaw/logs/watchdog.log</string>
-</dict>
-</plist>
-```
-
-### Load the watchdog:
+### Create the watchdog service files:
 
 ```bash
-launchctl load ~/Library/LaunchAgents/com.nanoclaw.watchdog.plist
+mkdir -p ~/.config/systemd/user
+```
+
+**Service unit** (`~/.config/systemd/user/nanoclaw-watchdog.service`):
+
+```ini
+[Unit]
+Description=NanoClaw Watchdog
+After=nanoclaw.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /home/YOUR_USERNAME/nanoclaw/scripts/watchdog.sh
+```
+
+**Timer unit** (`~/.config/systemd/user/nanoclaw-watchdog.timer`):
+
+```ini
+[Unit]
+Description=Run NanoClaw watchdog every 5 minutes
+Requires=nanoclaw-watchdog.service
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target
+```
+
+Replace `YOUR_USERNAME` with your actual username.
+
+### Load and enable:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now nanoclaw-watchdog.timer
+
+# Verify timer is running
+systemctl --user list-timers | grep watchdog
 ```
 
 ### How it works:
-- Runs `scripts/watchdog.sh` every **5 minutes** via launchd `StartInterval`
-- Each run calls `GET /api/health` with a 5-second timeout
+- Runs `scripts/watchdog.sh` every **5 minutes**
+- Calls `GET /api/health` with a 5-second timeout
 - Tracks consecutive failures in `logs/watchdog.state`
-- After **3 consecutive failures** (~15 min), runs `launchctl kickstart -k gui/$(id -u)/com.nanoclaw`
-- Resets failure count on success or after restart
-- Logs all activity to `logs/watchdog.log`
+- After **3 consecutive failures** (~15 min), runs `systemctl --user restart nanoclaw`
+- Logs to `logs/watchdog.log`
 
-### Monitoring the watchdog:
+### Monitor the watchdog:
 
 ```bash
-# Live watch
 tail -f logs/watchdog.log
-
-# Manual test (should log nothing if healthy)
-bash scripts/watchdog.sh
 ```
 
 ---
 
 ## Ongoing Maintenance
 
-### Deploy Updates from M1 Dev Machine:
-
-When you push changes from your M1:
+### Deploy updates pushed from M1:
 
 ```bash
-# On Intel Mac, run deployment script:
+cd ~/nanoclaw
 ./deploy.sh
-
-# This will:
-# 1. Backup database
-# 2. Pull latest code
-# 3. Install dependencies
-# 4. Rebuild container if Dockerfile changed
-# 5. Restart service
 ```
 
-### Manual Service Control:
+This backs up the DB, pulls latest code, installs deps, rebuilds the container if the Dockerfile changed, and restarts the service.
+
+### Manual service control:
 
 ```bash
-# Stop service
-launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
+# Start / stop / restart
+systemctl --user start nanoclaw
+systemctl --user stop nanoclaw
+systemctl --user restart nanoclaw
 
-# Start service
-launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
-
-# Restart service
-launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
-launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
-
-# Or use the kickstart shortcut:
-launchctl kickstart -k gui/$(id -u)/com.nanoclaw
+# Status and logs
+systemctl --user status nanoclaw
+journalctl --user -u nanoclaw -f
+tail -f ~/nanoclaw/logs/nanoclaw.log
 ```
 
-### View Logs:
+### View logs:
 
 ```bash
-# Live tail all logs
+# Live tail
 tail -f logs/nanoclaw.log
 
-# Live tail errors only
+# Errors only
 tail -f logs/nanoclaw.error.log
 
-# View last 100 lines
-tail -n 100 logs/nanoclaw.log
-
-# Search logs
-grep "ERROR" logs/nanoclaw.log
+# systemd journal
+journalctl --user -u nanoclaw -n 100
+journalctl --user -u nanoclaw --since "1 hour ago"
 ```
 
-### Monitor Resources:
+### Monitor Docker:
 
 ```bash
-# Check Docker resource usage
-docker stats
-
-# Check system resources
-top
-# Press 'q' to quit
+docker ps          # Running containers
+docker images      # Built images
+docker stats       # Live resource usage
 ```
 
 ---
 
 ## Troubleshooting
 
+### Docker permission denied after install
+```bash
+# Ensure you logged out/in after the usermod step
+# Or temporarily: newgrp docker
+```
+
 ### Service won't start
+```bash
+systemctl --user status nanoclaw
+journalctl --user -u nanoclaw --no-pager
 
-1. **Check plist syntax:**
-   ```bash
-   plutil -lint ~/Library/LaunchAgents/com.nanoclaw.plist
-   ```
+# Run manually to see the actual error:
+cd ~/nanoclaw && npm run build && node dist/index.js
+```
 
-2. **Check Node.js path:**
-   ```bash
-   which node
-   # Update path in plist if different from /usr/local/bin/node
-   ```
+### Container build fails
+```bash
+# Clean rebuild:
+docker builder prune -f
+./container/build.sh
+```
 
-3. **Check working directory:**
-   ```bash
-   ls /Users/marko/nanoclaw
-   # Ensure directory exists and path in plist is correct
-   ```
+### Bot not responding to Slack messages
+```bash
+# Check connection
+tail -f logs/nanoclaw.log | grep -i slack
 
-4. **Run manually to see errors:**
-   ```bash
-   cd ~/nanoclaw
-   npm run build
-   node dist/index.js
-   ```
+# Check channel registration
+sqlite3 store/messages.db "SELECT * FROM registered_groups;"
+```
 
-### Docker issues
+### Wi-Fi not working after Ubuntu install
+```bash
+sudo ubuntu-drivers autoinstall
+sudo reboot
+```
 
-1. **Docker not running:**
-   ```bash
-   # Open Docker Desktop manually
-   open -a Docker
-
-   # Wait for it to start, then retry
-   ```
-
-2. **Container build fails:**
-   ```bash
-   # Check Docker resources in settings
-   # Ensure at least 2 CPU / 4GB RAM allocated
-
-   # Rebuild without cache:
-   docker system prune -a
-   ./container/build.sh
-   ```
-
-### Bot not responding
-
-1. **Check logs:**
-   ```bash
-   tail -f logs/nanoclaw.log
-   ```
-
-2. **Verify tokens:**
-   ```bash
-   # Check .env has correct production tokens
-   cat .env | grep SLACK_BOT_TOKEN
-   cat .env | grep SLACK_APP_TOKEN
-   ```
-
-3. **Test connection:**
-   ```bash
-   # Stop service
-   launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
-
-   # Run manually
-   npm run dev
-
-   # Try sending message
-   # Check output for errors
-   ```
-
-### Out of memory
-
-If containers are crashing due to memory:
-
-1. **Lower MAX_CONCURRENT_CONTAINERS:**
-   ```bash
-   # Edit .env
-   MAX_CONCURRENT_CONTAINERS=1
-   ```
-
-2. **Restart service:**
-   ```bash
-   launchctl kickstart -k gui/$(id -u)/com.nanoclaw
-   ```
+### Out of memory (containers crashing)
+```bash
+# Lower concurrency in .env:
+MAX_CONCURRENT_CONTAINERS=1
+systemctl --user restart nanoclaw
+```
 
 ---
 
 ## Security Checklist
 
-- [ ] .env file is not committed to git
+- [ ] `.env` is not committed to git (`chmod 600 .env`)
 - [ ] Slack bot tokens are secure
 - [ ] Anthropic API key is secure
-- [ ] File permissions on .env are restrictive (600)
-- [ ] No sensitive data in SOUL.md or CLAUDE.md files
-- [ ] Logs directory is excluded from any sync services
-
-```bash
-# Set correct permissions
-chmod 600 .env
-chmod 700 ~/nanoclaw
-```
-
----
-
-## Next Steps
-
-Once production is running:
-
-1. **Monitor for 24 hours** - check logs, verify stability
-2. **Test both groups** - KEB Ops and Personal channels
-3. **Verify auto-restart** - reboot the Mac and ensure service starts
-4. **Set up backup schedule** - deploy.sh already backs up DB, consider additional backups
-5. **Document your workflow** - how you'll push changes from M1 to Intel
+- [ ] Logs directory excluded from sync services
 
 ---
 
 ## Quick Reference
 
-### Useful Commands
-
 ```bash
 # Service management
-launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
-launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
-launchctl kickstart -k gui/$(id -u)/com.nanoclaw
+systemctl --user start nanoclaw
+systemctl --user stop nanoclaw
+systemctl --user restart nanoclaw
+systemctl --user status nanoclaw
 
 # Logs
-tail -f logs/nanoclaw.log
-tail -f logs/nanoclaw.error.log
+tail -f ~/nanoclaw/logs/nanoclaw.log
+journalctl --user -u nanoclaw -f
 
 # Docker
-docker ps                    # List running containers
-docker images                # List images
-docker stats                 # Resource usage
+docker ps
+docker images
+docker stats
 
-# Deployment
-./deploy.sh                  # Deploy from git
-./container/build.sh         # Rebuild container
+# Deploy from git
+cd ~/nanoclaw && ./deploy.sh
 
-# Manual run (for testing)
-npm run build
-npm start
-# or
-npm run dev
+# Rebuild container
+./container/build.sh
 ```
 
 ### File Locations
 
-- **Project:** `~/nanoclaw/`
-- **Service plist:** `~/Library/LaunchAgents/com.nanoclaw.plist`
-- **Logs:** `~/nanoclaw/logs/`
-- **Database:** `~/nanoclaw/store/messages.db`
-- **Groups:** `~/nanoclaw/groups/`
-- **Environment:** `~/nanoclaw/.env`
-
----
-
-You're all set! Your Intel Mac should now be running NanoClaw 24/7 in production mode.
+| Path | Purpose |
+|------|---------|
+| `~/nanoclaw/` | Project root |
+| `~/.config/systemd/user/nanoclaw.service` | Service unit |
+| `~/.config/systemd/user/nanoclaw-watchdog.*` | Watchdog timer + service |
+| `~/nanoclaw/logs/` | Application and watchdog logs |
+| `~/nanoclaw/store/messages.db` | Database |
+| `~/nanoclaw/groups/` | Group data |
+| `~/nanoclaw/.env` | Secrets (never commit) |
