@@ -1,6 +1,6 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ApiService, Task, Group, NewTask } from '../../services/api.service';
+import { ApiService, Task, Group, NewTask, TaskRun } from '../../services/api.service';
 
 @Component({
   selector: 'app-tasks',
@@ -107,22 +107,50 @@ import { ApiService, Task, Group, NewTask } from '../../services/api.service';
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let t of tasks">
-            <td><span class="tag">{{ t.group_folder }}</span></td>
-            <td class="prompt-cell" [title]="t.prompt">{{ t.prompt | slice:0:80 }}{{ t.prompt.length > 80 ? '…' : '' }}</td>
-            <td class="schedule-cell">
-              <div class="schedule-label">{{ scheduleLabel(t) }}</div>
-              <span class="tag small">{{ t.schedule_type }}</span>
-            </td>
-            <td class="mono small">{{ t.next_run ? (t.next_run | date:'dd MMM HH:mm') : '—' }}</td>
-            <td class="mono small">{{ t.last_run ? (t.last_run | date:'dd MMM HH:mm') : '—' }}</td>
-            <td><span class="badge" [class]="t.status">{{ t.status.toUpperCase() }}</span></td>
-            <td class="actions-cell">
-              <button class="cmd-btn pause-btn" *ngIf="t.status === 'active'" (click)="pause(t)" title="Pause">⏸</button>
-              <button class="cmd-btn resume-btn" *ngIf="t.status === 'paused'" (click)="resume(t)" title="Resume">▶</button>
-              <button class="cmd-btn cancel-btn" (click)="cancel(t)" title="Delete">✕</button>
-            </td>
-          </tr>
+          <ng-container *ngFor="let t of tasks">
+            <tr [class.expanded]="expandedTaskId === t.id">
+              <td><span class="tag">{{ t.group_folder }}</span></td>
+              <td class="prompt-cell" [title]="t.prompt">{{ t.prompt | slice:0:80 }}{{ t.prompt.length > 80 ? '…' : '' }}</td>
+              <td class="schedule-cell">
+                <div class="schedule-label">{{ scheduleLabel(t) }}</div>
+                <span class="tag small">{{ t.schedule_type }}</span>
+              </td>
+              <td class="mono small">{{ t.next_run ? (t.next_run | date:'dd MMM HH:mm') : '—' }}</td>
+              <td class="mono small">{{ t.last_run ? (t.last_run | date:'dd MMM HH:mm') : '—' }}</td>
+              <td><span class="badge" [class]="t.status">{{ t.status.toUpperCase() }}</span></td>
+              <td class="actions-cell">
+                <button class="cmd-btn pause-btn" *ngIf="t.status === 'active'" (click)="pause(t)" title="Pause">⏸</button>
+                <button class="cmd-btn resume-btn" *ngIf="t.status === 'paused'" (click)="resume(t)" title="Resume">▶</button>
+                <button class="cmd-btn history-btn" (click)="toggleHistory(t)" title="Run history">◷</button>
+                <button class="cmd-btn cancel-btn" (click)="cancel(t)" title="Delete">✕</button>
+              </td>
+            </tr>
+            <tr class="history-row" *ngIf="expandedTaskId === t.id">
+              <td colspan="7">
+                <div class="history-panel">
+                  <div class="history-header">
+                    <span class="history-prefix">// RUN HISTORY</span>
+                    <span class="history-task">{{ t.group_folder }}</span>
+                  </div>
+                  <div class="history-loading" *ngIf="runsLoading">⠿ loading runs...</div>
+                  <div class="history-empty" *ngIf="!runsLoading && taskRuns[t.id]?.length === 0">NO RUNS RECORDED YET</div>
+                  <table class="history-table" *ngIf="!runsLoading && taskRuns[t.id]?.length">
+                    <thead><tr>
+                      <th>RUN AT</th><th>DURATION</th><th>STATUS</th><th>RESULT</th>
+                    </tr></thead>
+                    <tbody>
+                      <tr *ngFor="let r of taskRuns[t.id]">
+                        <td class="mono small">{{ r.run_at | date:'dd MMM HH:mm' }}</td>
+                        <td class="mono small">{{ fmtDuration(r.duration_ms) }}</td>
+                        <td><span class="run-badge" [class.run-success]="r.status === 'success'" [class.run-error]="r.status !== 'success'">{{ r.status }}</span></td>
+                        <td class="run-result-cell" [title]="r.result || r.error || ''">{{ (r.result || r.error || '—') | slice:0:150 }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </td>
+            </tr>
+          </ng-container>
         </tbody>
       </table>
     </div>
@@ -403,6 +431,75 @@ import { ApiService, Task, Group, NewTask } from '../../services/api.service';
       &::-webkit-scrollbar { width: 4px; }
       &::-webkit-scrollbar-thumb { background: rgba(0,200,255,0.2); border-radius: 2px; }
     }
+
+    /* Run history */
+    .history-btn { &:hover { border-color: var(--purple); color: var(--purple); background: rgba(123,47,255,0.1); } }
+
+    tr.expanded td { border-bottom: none; }
+
+    .history-row td {
+      padding: 0;
+      border-top: none;
+      background: rgba(0,0,0,0.25);
+    }
+
+    .history-panel {
+      padding: 14px 20px;
+      border-top: 1px solid rgba(0,200,255,0.06);
+    }
+
+    .history-header {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .history-prefix {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      color: var(--cyan);
+      opacity: 0.6;
+    }
+
+    .history-task {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .history-loading, .history-empty {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+      padding: 6px 0;
+    }
+
+    .history-table {
+      width: 100%;
+      font-size: 11px;
+      th { font-size: 9px; letter-spacing: 0.12em; padding: 0 12px 6px 0; font-weight: 600; }
+      td { padding: 4px 12px 4px 0; vertical-align: top; border: none; }
+    }
+
+    .run-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      padding: 2px 5px;
+      border-radius: 2px;
+      letter-spacing: 0.08em;
+      &.run-success { background: rgba(0,255,136,0.1); color: var(--green); border: 1px solid rgba(0,255,136,0.2); }
+      &.run-error   { background: rgba(255,51,102,0.1); color: var(--danger); border: 1px solid rgba(255,51,102,0.2); }
+    }
+
+    .run-result-cell {
+      color: var(--text-muted);
+      max-width: 500px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   `],
 })
 export class TasksComponent implements OnInit {
@@ -415,6 +512,9 @@ export class TasksComponent implements OnInit {
   submitting = false;
   formError = '';
   selectedTask: Task | null = null;
+  expandedTaskId: string | null = null;
+  taskRuns: Record<string, TaskRun[]> = {};
+  runsLoading = false;
 
   form: NewTask = {
     group_folder: '',
@@ -568,6 +668,27 @@ export class TasksComponent implements OnInit {
 
   private round(n: number): string {
     return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  }
+
+  toggleHistory(t: Task): void {
+    if (this.expandedTaskId === t.id) {
+      this.expandedTaskId = null;
+      return;
+    }
+    this.expandedTaskId = t.id;
+    if (!this.taskRuns[t.id]) {
+      this.runsLoading = true;
+      this.api.getTaskRuns(t.id).subscribe({
+        next: (runs) => { this.taskRuns[t.id] = runs; this.runsLoading = false; },
+        error: () => { this.taskRuns[t.id] = []; this.runsLoading = false; },
+      });
+    }
+  }
+
+  fmtDuration(ms: number): string {
+    if (!ms || ms < 1000) return `${ms || 0}ms`;
+    if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${Math.round(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
   }
 
   ngOnInit(): void {

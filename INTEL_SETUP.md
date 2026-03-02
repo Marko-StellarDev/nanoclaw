@@ -373,6 +373,68 @@ tail -f logs/nanoclaw.log
 
 ---
 
+## Watchdog Setup (Auto-Recovery)
+
+The launchd `KeepAlive` setting restarts the bot if it **crashes**, but not if it **hangs** (process running, port 3001 not responding). The watchdog handles this case.
+
+### Create the watchdog plist:
+
+```bash
+nano ~/Library/LaunchAgents/com.nanoclaw.watchdog.plist
+```
+
+Add the following (replace `/Users/marko` with your actual username):
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nanoclaw.watchdog</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/marko/nanoclaw/scripts/watchdog.sh</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>300</integer>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/marko/nanoclaw/logs/watchdog.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/marko/nanoclaw/logs/watchdog.log</string>
+</dict>
+</plist>
+```
+
+### Load the watchdog:
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.nanoclaw.watchdog.plist
+```
+
+### How it works:
+- Runs `scripts/watchdog.sh` every **5 minutes** via launchd `StartInterval`
+- Each run calls `GET /api/health` with a 5-second timeout
+- Tracks consecutive failures in `logs/watchdog.state`
+- After **3 consecutive failures** (~15 min), runs `launchctl kickstart -k gui/$(id -u)/com.nanoclaw`
+- Resets failure count on success or after restart
+- Logs all activity to `logs/watchdog.log`
+
+### Monitoring the watchdog:
+
+```bash
+# Live watch
+tail -f logs/watchdog.log
+
+# Manual test (should log nothing if healthy)
+bash scripts/watchdog.sh
+```
+
+---
+
 ## Ongoing Maintenance
 
 ### Deploy Updates from M1 Dev Machine:

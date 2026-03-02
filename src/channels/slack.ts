@@ -9,12 +9,17 @@
 //   - No Socket Mode equivalent needed — Telegram uses long-polling or webhooks
 // See: https://github.com/qwibitai/nanoclaw for community channel implementations
 
+import path from 'path';
+import fs from 'fs';
 import pkg from '@slack/bolt';
 const { App, LogLevel } = pkg;
 type AppType = InstanceType<typeof App>;
 import { logger } from '../logger.js';
 import { Channel, OnInboundMessage, OnChatMetadata, RegisteredGroup } from '../types.js';
-import { ASSISTANT_NAME } from '../config.js';
+import { ASSISTANT_NAME, GROUPS_DIR } from '../config.js';
+import { isAudioMimetype, transcribeAudioFile } from '../transcription.js';
+
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
 export interface SlackChannelOpts {
   onMessage: OnInboundMessage;
@@ -94,7 +99,8 @@ export class SlackChannel implements Channel {
       logger.info({ event, channel_type: (event as any).channel_type }, 'Received message event');
       try {
         // Skip subtypes (message_changed, message_deleted, bot_message, etc.)
-        if ((event as any).subtype) return;
+        // but allow file_share so we can handle file attachments
+        if ((event as any).subtype && (event as any).subtype !== 'file_share') return;
         // Skip if already handled as an app_mention (dedup)
         if (this.recentMentionTs.has(event.ts)) return;
         await this.handleMessage(event);
@@ -172,6 +178,42 @@ export class SlackChannel implements Channel {
     text = text.replace(/<@[A-Z0-9]+>/g, '').trim();
     if (isMention) {
       text = `@${ASSISTANT_NAME} ${text}`;
+    }
+
+    // Handle file attachments — download to group uploads dir
+    if (event.files && Array.isArray(event.files) && event.files.length > 0) {
+      const folder = groups[chatJid]?.folder;
+      if (folder) {
+        const uploadDir = path.join(GROUPS_DIR, folder, 'uploads');
+        fs.mkdirSync(uploadDir, { recursive: true });
+        for (const file of event.files as Array<{ name?: string; url_private_download?: string; size?: number; mimetype?: string }>) {
+          if (!file.url_private_download || !file.name) continue;
+          if (file.size && file.size > MAX_FILE_SIZE) {
+            text += `\n[File too large to download: ${file.name} (${Math.round(file.size / 1024 / 1024)}MB)]`;
+            continue;
+          }
+          try {
+            const localPath = await this.downloadFile(file.url_private_download, uploadDir, file.name);
+            const agentPath = `/workspace/group/uploads/${path.basename(localPath)}`;
+
+            // Transcribe audio/video files (voice notes) via Whisper
+            if (file.mimetype && isAudioMimetype(file.mimetype)) {
+              const transcript = await transcribeAudioFile(localPath);
+              if (transcript) {
+                text += `\n[Voice: ${transcript}]`;
+              } else {
+                text += `\n[Voice note: ${file.name} → ${agentPath}]`;
+              }
+            } else {
+              text += `\n[Attached file: ${file.name} → ${agentPath}]`;
+            }
+            logger.info({ file: file.name, agentPath, mimetype: file.mimetype }, 'Slack file downloaded');
+          } catch (err) {
+            logger.warn({ err, file: file.name }, 'Failed to download Slack file');
+            text += `\n[File attached but download failed: ${file.name}]`;
+          }
+        }
+      }
     }
 
     const sender = event.user;
@@ -278,6 +320,23 @@ export class SlackChannel implements Channel {
     }
 
     return chunks;
+  }
+
+  private async downloadFile(url: string, dir: string, name: string): Promise<string> {
+    // Sanitise filename — keep alphanumeric, dots, dashes, underscores
+    const safeName = `${Date.now()}-${name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const destPath = path.join(dir, safeName);
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${this.opts.botToken}` },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status} fetching file`);
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > MAX_FILE_SIZE) throw new Error(`File too large (${buffer.length} bytes)`);
+
+    fs.writeFileSync(destPath, buffer);
+    return destPath;
   }
 
   private async flushOutgoingQueue(): Promise<void> {

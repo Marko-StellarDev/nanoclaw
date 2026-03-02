@@ -473,6 +473,28 @@ export function logTaskRun(log: TaskRunLog): void {
   );
 }
 
+export interface TaskRunLogEntry {
+  id: number;
+  task_id: string;
+  run_at: string;
+  duration_ms: number;
+  status: string;
+  result: string | null;
+  error: string | null;
+}
+
+export function getTaskRunLogs(taskId: string, limit = 20): TaskRunLogEntry[] {
+  return db
+    .prepare(
+      `SELECT id, task_id, run_at, duration_ms, status, result, error
+       FROM task_run_logs
+       WHERE task_id = ?
+       ORDER BY run_at DESC
+       LIMIT ?`,
+    )
+    .all(taskId, limit) as TaskRunLogEntry[];
+}
+
 // --- Router state accessors ---
 
 export function getRouterState(key: string): string | undefined {

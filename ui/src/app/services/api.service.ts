@@ -113,6 +113,10 @@ export class ApiService {
   createTask(task: NewTask): Observable<{ ok: boolean; id: string }> {
     return this.http.post<{ ok: boolean; id: string }>('/api/tasks', task);
   }
+
+  getTaskRuns(taskId: string, limit = 20): Observable<TaskRun[]> {
+    return this.http.get<TaskRun[]>(`/api/tasks/${taskId}/runs?limit=${limit}`);
+  }
 }
 
 export interface NewTask {
@@ -121,6 +125,16 @@ export interface NewTask {
   schedule_type: 'cron' | 'interval' | 'once';
   schedule_value: string;
   context_mode: 'group' | 'isolated';
+}
+
+export interface TaskRun {
+  id: number;
+  task_id: string;
+  run_at: string;
+  duration_ms: number;
+  status: string;
+  result: string | null;
+  error: string | null;
 }
 
 export interface AuditEvent {

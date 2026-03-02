@@ -20,6 +20,7 @@
  *   POST   /api/tasks/:id/resume
  *   DELETE /api/tasks/:id
  *   GET    /api/audit?limit=100&group=folder
+ *   GET    /api/tasks/:id/runs?limit=20
  */
 import http from 'http';
 import fs from 'fs';
@@ -32,6 +33,7 @@ import {
   getAllRegisteredGroups, getAllTasks, getRecentMessages,
   getAuditEvents, AuditEvent,
   storeMessageDirect, createTask, updateTask, deleteTask, getTaskById,
+  getTaskRunLogs,
 } from './db.js';
 import { getAgentStatuses } from './agent-status.js';
 import { isValidGroupFolder } from './group-folder.js';
@@ -230,6 +232,15 @@ export function startApiServer(): void {
         // GET /api/tasks
         if (url.pathname === '/api/tasks') {
           json(res, getAllTasks());
+          return;
+        }
+
+        // GET /api/tasks/:id/runs?limit=20
+        if (parts[0] === 'api' && parts[1] === 'tasks' && parts[2] && parts[3] === 'runs') {
+          const task = getTaskById(parts[2]);
+          if (!task) { json(res, { error: 'Task not found' }, 404); return; }
+          const limit = Math.min(parseInt(url.searchParams.get('limit') || '20', 10), 100);
+          json(res, getTaskRunLogs(parts[2], limit));
           return;
         }
 
