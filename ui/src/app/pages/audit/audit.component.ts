@@ -43,6 +43,7 @@ import { ApiService, AuditEvent, Group } from '../../services/api.service';
             <td class="activity-cell" [title]="e.detail">
               <span *ngIf="e.type === 'activity'" class="tool-icon">{{ toolIcon(e.tool) }}</span>
               {{ e.summary }}{{ e.summary.length >= 100 ? '…' : '' }}
+              <span *ngIf="e.type === 'task' && e.model" class="model-tag">{{ shortModel(e.model) }}</span>
             </td>
           </tr>
         </tbody>
@@ -142,6 +143,19 @@ import { ApiService, AuditEvent, Group } from '../../services/api.service';
 
     /* task badge colour */
     .badge.task { background: rgba(249,115,22,0.15); color: var(--keb); }
+
+    .model-tag {
+      display: inline-block;
+      margin-left: 6px;
+      font-size: 10px;
+      color: var(--text-muted);
+      background: rgba(148,163,184,0.1);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 0 4px;
+      vertical-align: middle;
+      font-family: monospace;
+    }
   `],
 })
 export class AuditComponent implements OnInit, OnDestroy {
@@ -171,6 +185,12 @@ export class AuditComponent implements OnInit, OnDestroy {
     if (e.type === 'bot')      return 'bot';
     if (e.type === 'activity') return 'activity';
     return e.status === 'error' ? 'paused task' : 'active task';
+  }
+
+  shortModel(model?: string): string {
+    if (!model) return '';
+    // claude-sonnet-4-6 → sonnet-4.6, claude-opus-4-6 → opus-4.6, claude-haiku-4-5-... → haiku-4.5
+    return model.replace(/^claude-/, '').replace(/-(\d+)-(\d+).*$/, '-$1.$2');
   }
 
   toolIcon(tool?: string): string {

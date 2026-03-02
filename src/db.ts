@@ -101,6 +101,13 @@ function createSchema(database: Database.Database): void {
     /* column already exists */
   }
 
+  // Add model column to task_run_logs if it doesn't exist (migration for existing DBs)
+  try {
+    database.exec(`ALTER TABLE task_run_logs ADD COLUMN model TEXT`);
+  } catch {
+    /* column already exists */
+  }
+
   // Add channel and is_group columns if they don't exist (migration for existing DBs)
   try {
     database.exec(
@@ -370,7 +377,8 @@ export interface AuditEvent {
   summary: string;
   detail: string;
   status?: string; // for task events: 'success' | 'error'
-  tool?: string;  // for activity events: tool name (Bash, WebFetch, etc.)
+  tool?: string;   // for activity events: tool name (Bash, WebFetch, etc.)
+  model?: string;  // for task events: model used (e.g. claude-sonnet-4-6)
 }
 
 /**
@@ -405,7 +413,8 @@ export function getAuditEvents(limit = 100, folder?: string): AuditEvent[] {
       'task' AS type,
       SUBSTR(st.prompt, 1, 100) AS summary,
       COALESCE(trl.result, trl.error, '') AS detail,
-      trl.status
+      trl.status,
+      trl.model
     FROM task_run_logs trl
     JOIN scheduled_tasks st ON trl.task_id = st.id
     LEFT JOIN registered_groups rg ON st.group_folder = rg.folder
@@ -538,8 +547,8 @@ export function updateTaskAfterRun(
 export function logTaskRun(log: TaskRunLog): void {
   db.prepare(
     `
-    INSERT INTO task_run_logs (task_id, run_at, duration_ms, status, result, error)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO task_run_logs (task_id, run_at, duration_ms, status, result, error, model)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `,
   ).run(
     log.task_id,
@@ -548,6 +557,7 @@ export function logTaskRun(log: TaskRunLog): void {
     log.status,
     log.result,
     log.error,
+    log.model ?? null,
   );
 }
 

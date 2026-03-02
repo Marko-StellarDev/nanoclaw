@@ -132,4 +132,5 @@ export interface AuditEvent {
   detail: string;
   status?: string;
   tool?: string;
+  model?: string;
 }

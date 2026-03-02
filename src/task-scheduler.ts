@@ -6,6 +6,7 @@ import {
   ASSISTANT_NAME,
   IDLE_TIMEOUT,
   MAIN_GROUP_FOLDER,
+  MODEL_DEFAULT,
   SCHEDULER_POLL_INTERVAL,
   TIMEZONE,
 } from './config.js';
@@ -54,6 +55,7 @@ async function runTask(
       status: 'error',
       result: null,
       error,
+      model: MODEL_DEFAULT,
     });
     return;
   }
@@ -81,6 +83,7 @@ async function runTask(
       status: 'error',
       result: null,
       error: `Group not found: ${task.group_folder}`,
+      model: MODEL_DEFAULT,
     });
     return;
   }
@@ -181,6 +184,7 @@ async function runTask(
     status: error ? 'error' : 'success',
     result,
     error,
+    model: MODEL_DEFAULT,
   });
 
   let nextRun: string | null = null;
