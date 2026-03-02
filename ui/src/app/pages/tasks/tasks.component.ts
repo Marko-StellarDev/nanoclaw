@@ -34,21 +34,33 @@ import { ApiService, Task, Group, NewTask } from '../../services/api.service';
           </select>
         </div>
         <div class="form-group">
-          <label>Schedule Type</label>
-          <select (change)="form.schedule_type = $any($event.target).value; form.schedule_value = ''">
-            <option value="cron">cron</option>
-            <option value="interval">interval (ms)</option>
-            <option value="once">once (ISO date)</option>
+          <label>Repeat</label>
+          <select (change)="onScheduleTypeChange($any($event.target).value)">
+            <option value="cron">Recurring (cron)</option>
+            <option value="interval">Recurring (every X)</option>
+            <option value="once">One-time</option>
           </select>
         </div>
         <div class="form-group">
-          <label>Schedule Value</label>
-          <input
-            type="text"
-            [placeholder]="schedulePlaceholder"
-            [value]="form.schedule_value"
-            (input)="form.schedule_value = $any($event.target).value"
-          />
+          <label>When to run</label>
+          <!-- cron or interval: preset dropdown -->
+          <select *ngIf="form.schedule_type !== 'once'"
+                  (change)="onPresetChange($any($event.target).value)">
+            <option value="">Choose…</option>
+            <option *ngFor="let p of schedulePresets" [value]="p.value">{{ p.label }}</option>
+          </select>
+          <!-- custom free-text fallback -->
+          <input *ngIf="showCustomInput"
+                 type="text"
+                 class="custom-input"
+                 [placeholder]="form.schedule_type === 'cron' ? 'e.g. 0 9 * * 1-5' : 'milliseconds, e.g. 3600000'"
+                 [value]="form.schedule_value"
+                 (input)="form.schedule_value = $any($event.target).value" />
+          <!-- once: date+time picker -->
+          <input *ngIf="form.schedule_type === 'once'"
+                 type="datetime-local"
+                 [min]="minDateTime"
+                 (change)="onDateTimeChange($any($event.target).value)" />
         </div>
         <div class="form-group full-width">
           <label>Prompt</label>
@@ -176,6 +188,11 @@ import { ApiService, Task, Group, NewTask } from '../../services/api.service';
         &:focus { outline: none; border-color: var(--accent); }
       }
       textarea { resize: vertical; }
+      .custom-input { margin-top: 6px; }
+
+      input[type="datetime-local"] {
+        color-scheme: dark;
+      }
     }
 
     .form-actions {
@@ -275,6 +292,64 @@ export class TasksComponent implements OnInit {
     schedule_value: '',
     context_mode: 'isolated',
   };
+  showCustomInput = false;
+
+  get minDateTime(): string {
+    return new Date().toISOString().slice(0, 16);
+  }
+
+  get schedulePresets(): { label: string; value: string }[] {
+    if (this.form.schedule_type === 'cron') {
+      return [
+        { label: 'Every minute',             value: '* * * * *' },
+        { label: 'Every 15 minutes',         value: '*/15 * * * *' },
+        { label: 'Every 30 minutes',         value: '*/30 * * * *' },
+        { label: 'Every hour',               value: '0 * * * *' },
+        { label: 'Every 4 hours',            value: '0 */4 * * *' },
+        { label: 'Every 6 hours',            value: '0 */6 * * *' },
+        { label: 'Daily at midnight',        value: '0 0 * * *' },
+        { label: 'Daily at 8 AM',            value: '0 8 * * *' },
+        { label: 'Daily at 9 AM',            value: '0 9 * * *' },
+        { label: 'Daily at noon',            value: '0 12 * * *' },
+        { label: 'Weekdays at 8 AM',         value: '0 8 * * 1-5' },
+        { label: 'Weekdays at 9 AM',         value: '0 9 * * 1-5' },
+        { label: 'Mondays at 9 AM',          value: '0 9 * * 1' },
+        { label: 'Monthly on 1st at 9 AM',   value: '0 9 1 * *' },
+        { label: 'Custom cron expression…',  value: '__custom__' },
+      ];
+    }
+    return [
+      { label: 'Every 15 minutes',  value: '900000' },
+      { label: 'Every 30 minutes',  value: '1800000' },
+      { label: 'Every 1 hour',      value: '3600000' },
+      { label: 'Every 2 hours',     value: '7200000' },
+      { label: 'Every 4 hours',     value: '14400000' },
+      { label: 'Every 6 hours',     value: '21600000' },
+      { label: 'Every 12 hours',    value: '43200000' },
+      { label: 'Every day',         value: '86400000' },
+      { label: 'Custom (ms)…',      value: '__custom__' },
+    ];
+  }
+
+  onScheduleTypeChange(val: string): void {
+    this.form.schedule_type = val as 'cron' | 'interval' | 'once';
+    this.form.schedule_value = '';
+    this.showCustomInput = false;
+  }
+
+  onPresetChange(val: string): void {
+    if (val === '__custom__') {
+      this.showCustomInput = true;
+      this.form.schedule_value = '';
+    } else {
+      this.showCustomInput = false;
+      this.form.schedule_value = val;
+    }
+  }
+
+  onDateTimeChange(val: string): void {
+    this.form.schedule_value = val ? new Date(val).toISOString() : '';
+  }
 
   get activeTasks() { return this.tasks.filter(t => t.status === 'active').length; }
   get pausedTasks()  { return this.tasks.filter(t => t.status === 'paused').length; }
@@ -373,12 +448,6 @@ export class TasksComponent implements OnInit {
     return Number.isInteger(n) ? String(n) : n.toFixed(1);
   }
 
-  get schedulePlaceholder(): string {
-    if (this.form.schedule_type === 'cron')     return '0 9 * * 1-5  (weekdays 9am)';
-    if (this.form.schedule_type === 'interval') return '3600000  (ms — every 1h)';
-    return new Date(Date.now() + 3_600_000).toISOString().slice(0, 16);
-  }
-
   ngOnInit(): void {
     this.load();
     this.api.groups().subscribe({ next: g => this.groups = g, error: () => {} });
@@ -416,6 +485,7 @@ export class TasksComponent implements OnInit {
       next: () => {
         this.submitting = false;
         this.showForm = false;
+        this.showCustomInput = false;
         this.form = { group_folder: '', prompt: '', schedule_type: 'cron', schedule_value: '', context_mode: 'isolated' };
         this.load();
       },
