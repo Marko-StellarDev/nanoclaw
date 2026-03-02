@@ -24,10 +24,17 @@ import { isValidGroupFolder } from './group-folder.js';
 import { logger } from './logger.js';
 
 const API_PORT = parseInt(process.env.API_PORT || '3001', 10);
+// Default to localhost-only. Set API_HOST=0.0.0.0 to allow LAN access
+// (e.g. to view the dashboard from another machine on the same network).
+// Only do this on a trusted network — the API has no authentication.
+const API_HOST = process.env.API_HOST || '127.0.0.1';
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/; // YYYY-MM
 
+// Allow the Angular dev server origin. When API_HOST=0.0.0.0 (LAN mode),
+// also allow requests from any local network origin by using '*'.
+const CORS_ORIGIN = API_HOST === '127.0.0.1' ? 'http://localhost:4200' : '*';
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': 'http://localhost:4200',
+  'Access-Control-Allow-Origin': CORS_ORIGIN,
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
@@ -161,8 +168,8 @@ export function startApiServer(): void {
     }
   });
 
-  server.listen(API_PORT, '127.0.0.1', () => {
-    logger.info({ port: API_PORT }, `API server listening on http://127.0.0.1:${API_PORT}`);
+  server.listen(API_PORT, API_HOST, () => {
+    logger.info({ port: API_PORT, host: API_HOST }, `API server listening on http://${API_HOST}:${API_PORT}`);
   });
 
   server.on('error', (err) => {

@@ -69,9 +69,10 @@ Keep CLAUDE.md under 200 lines total. Prune stale entries when adding new ones.
 
 You run on **claude-sonnet-4-6** by default (good balance of speed and quality).
 
-For heavy tasks (complex multi-step audit reasoning, large data analysis), you can switch:
-- Use `/model claude-opus-4-6` in your response to switch to Opus for a complex task
-- Switch back with `/model claude-sonnet-4-6` when done
+Switch models to match the task:
+- `/model claude-opus-4-6` — complex multi-step audit reasoning, large data analysis. Switch back when done.
+- `/model claude-haiku-4-5-20251001` — simple quick lookups, status checks, single-fact answers. Switch back when done.
+- `/model claude-sonnet-4-6` — default, good for everything else
 
 Your token usage is tracked monthly in `/workspace/group/.usage/YYYY-MM.json`.
 To report usage: read that file and summarise input/output tokens, runs, and % of budget used.

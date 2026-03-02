@@ -67,16 +67,17 @@
 
 ### Message Processing Flow
 ```
-WhatsApp → onMessage callback → storeMessage(db) →
+Slack → onMessage callback → storeMessage(db) →
 polling loop (2s) → formatMessages() →
 runContainerAgent() → agent output →
-stripInternalTags() → sendMessage(channel) → WhatsApp
+stripInternalTags() → sendMessage(channel) → Slack
 ```
 
 ### Container Execution Model
 ```
 Host Process (Node.js)
-├── WhatsApp connection (Baileys)
+├── Slack connection (Bolt SDK, Socket Mode)
+├── REST API server (:3001)
 ├── Message polling loop (2s)
 ├── IPC watcher (1s)
 ├── Scheduler loop (60s)
@@ -302,15 +303,25 @@ Container (per group)
 - **Functions:**
   - `isValidGroupFolder()`, `resolveGroupFolderPath()`, `resolveGroupIpcPath()`
 
+### Web Dashboard
+
+**`src/api.ts` (~165 lines)**
+- Lightweight REST API using Node built-in `http` (zero new deps)
+- **Port:** `3001` (override with `API_PORT`); binds to `127.0.0.1` by default (set `API_HOST=0.0.0.0` for LAN access)
+- **Endpoints:** `/api/health`, `/api/groups`, `/api/groups/:folder/messages`, `/api/groups/:folder/usage`, `/api/groups/:folder/tasks`, `/api/tasks`
+- **Security:** CORS restricted to localhost:4200 (wildcard when `API_HOST=0.0.0.0`); folder param validated via `isValidGroupFolder()`; month param validated against `YYYY-MM` pattern
+- Started from `src/index.ts` `main()` before message loop
+
+**`ui/`**
+- Angular 17 standalone app, served on `:4200` (`cd ui && npm start`)
+- Pages: Dashboard (all groups), KEB Ops (branch network, usage, tasks), Tasks (all scheduled tasks)
+- Proxies `/api` to `:3001` via `proxy.conf.json` — **must use `npm start`**, not `npx ng serve`
+
 ### Utilities
 
 **`src/logger.ts` (463 bytes)**
 - Pino logger with pretty printing
 - Level: `process.env.LOG_LEVEL` or `info`
-
-**`src/whatsapp-auth.ts` (166 lines)**
-- Standalone WhatsApp auth script
-- Methods: QR terminal, QR browser, pairing code
 
 ---
 

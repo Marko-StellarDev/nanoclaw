@@ -1,3 +1,14 @@
+// Channel: Slack (Bolt SDK, Socket Mode)
+// Future: To swap Telegram in, replace this file with a Telegram channel implementation
+// that satisfies the Channel interface (src/types.ts). Key differences:
+//   - Telegram uses bot tokens (TELEGRAM_BOT_TOKEN), no App token needed
+//   - Telegram has native typing indicators (sendChatAction 'typing')
+//   - Telegram JID format: 'tg:{chatId}' (already supported in db.ts)
+//   - Use telegraf or node-telegram-bot-api instead of @slack/bolt
+//   - Message events: bot.on('text', ...) instead of app.event('message', ...)
+//   - No Socket Mode equivalent needed — Telegram uses long-polling or webhooks
+// See: https://github.com/qwibitai/nanoclaw for community channel implementations
+
 import pkg from '@slack/bolt';
 const { App, LogLevel } = pkg;
 type AppType = InstanceType<typeof App>;
@@ -11,6 +22,7 @@ export interface SlackChannelOpts {
   registeredGroups: () => Record<string, RegisteredGroup>;
   botToken: string;     // Bot User OAuth Token (xoxb-...)
   appToken: string;     // App-Level Token (xapp-...) for Socket Mode
+  // Future Telegram equivalent: botToken only (no appToken needed)
 }
 
 export class SlackChannel implements Channel {
@@ -31,6 +43,8 @@ export class SlackChannel implements Channel {
     logger.info('Connecting to Slack...');
 
     // Create Slack app with Socket Mode (no public URL needed)
+    // Future Telegram: Replace with `new Telegraf(botToken)` and bot.launch()
+    // No App-level token required; Telegram uses long-polling by default
     this.app = new App({
       token: this.opts.botToken,
       appToken: this.opts.appToken,
@@ -316,8 +330,7 @@ export class SlackChannel implements Channel {
       const channelId = this.jidToChannelId(jid);
 
       // Slack doesn't have a built-in typing indicator API for bots
-      // We could use chat.postEphemeral or just skip it
-      // For now, we'll skip typing indicators on Slack
+      // Future Telegram: bot.telegram.sendChatAction(chatId, 'typing')
       logger.debug({ jid }, 'Slack typing indicator not implemented');
     } catch (err) {
       logger.debug({ jid, err }, 'Failed to set Slack typing indicator');
