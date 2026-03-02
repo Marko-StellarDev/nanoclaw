@@ -195,7 +195,7 @@ Container (per group)
   - Offline message queue
   - Markdown formatting (mrkdwn)
 - **JID Format:** `slack:{channelId}` where channelId starts with C (channel) or D (DM)
-- **File uploads:** `message` + `file_share` events with `files[]` — downloads to `groups/{folder}/uploads/` (50MB cap); audio mimetypes transcribed via Whisper; agent sees `[Voice: transcript]` or `[Attached file: name → /workspace/group/uploads/name]`
+- **File uploads:** `message` + `file_share` events with `files[]` — downloads to `groups/{folder}/uploads/` (50MB cap, sanitised filenames); agent sees `[Attached file: name → /workspace/group/uploads/name]`
 
 ### Container System
 
@@ -314,13 +314,6 @@ Container (per group)
   - `isValidGroupFolder()`, `resolveGroupFolderPath()`, `resolveGroupIpcPath()`
 
 ### Web Dashboard
-
-**`src/transcription.ts` (56 lines)**
-- Voice note transcription via OpenAI Whisper API
-- **Exports:** `isAudioMimetype(mimetype)`, `transcribeAudioFile(filePath)`
-- Dynamic `import('openai')` — only loads when a voice note arrives
-- Uses `readEnvFile(['OPENAI_API_KEY'])` — gracefully skips if key not set
-- Called from `src/channels/slack.ts` after file download; falls back to file path
 
 **`src/agent-status.ts` (21 lines)**
 - Shared in-memory status registry
@@ -616,8 +609,7 @@ nanoclaw/
 │   ├── index.ts                  # Orchestrator (entry point)
 │   ├── config.ts                 # Configuration
 │   ├── db.ts                     # SQLite
-│   ├── channels/slack.ts         # Slack channel (incl. file download + voice)
-│   ├── transcription.ts          # OpenAI Whisper voice transcription
+│   ├── channels/slack.ts         # Slack channel (incl. file uploads)
 │   ├── container-runner.ts       # Agent spawner
 │   ├── group-queue.ts            # Concurrency
 │   ├── ipc.ts                    # IPC watcher

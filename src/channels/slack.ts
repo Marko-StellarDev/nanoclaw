@@ -17,7 +17,6 @@ type AppType = InstanceType<typeof App>;
 import { logger } from '../logger.js';
 import { Channel, OnInboundMessage, OnChatMetadata, RegisteredGroup } from '../types.js';
 import { ASSISTANT_NAME, GROUPS_DIR } from '../config.js';
-import { isAudioMimetype, transcribeAudioFile } from '../transcription.js';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
@@ -186,7 +185,7 @@ export class SlackChannel implements Channel {
       if (folder) {
         const uploadDir = path.join(GROUPS_DIR, folder, 'uploads');
         fs.mkdirSync(uploadDir, { recursive: true });
-        for (const file of event.files as Array<{ name?: string; url_private_download?: string; size?: number; mimetype?: string }>) {
+        for (const file of event.files as Array<{ name?: string; url_private_download?: string; size?: number }>) {
           if (!file.url_private_download || !file.name) continue;
           if (file.size && file.size > MAX_FILE_SIZE) {
             text += `\n[File too large to download: ${file.name} (${Math.round(file.size / 1024 / 1024)}MB)]`;
@@ -195,19 +194,8 @@ export class SlackChannel implements Channel {
           try {
             const localPath = await this.downloadFile(file.url_private_download, uploadDir, file.name);
             const agentPath = `/workspace/group/uploads/${path.basename(localPath)}`;
-
-            // Transcribe audio/video files (voice notes) via Whisper
-            if (file.mimetype && isAudioMimetype(file.mimetype)) {
-              const transcript = await transcribeAudioFile(localPath);
-              if (transcript) {
-                text += `\n[Voice: ${transcript}]`;
-              } else {
-                text += `\n[Voice note: ${file.name} → ${agentPath}]`;
-              }
-            } else {
-              text += `\n[Attached file: ${file.name} → ${agentPath}]`;
-            }
-            logger.info({ file: file.name, agentPath, mimetype: file.mimetype }, 'Slack file downloaded');
+            text += `\n[Attached file: ${file.name} → ${agentPath}]`;
+            logger.info({ file: file.name, agentPath }, 'Slack file downloaded');
           } catch (err) {
             logger.warn({ err, file: file.name }, 'Failed to download Slack file');
             text += `\n[File attached but download failed: ${file.name}]`;

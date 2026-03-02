@@ -142,12 +142,6 @@
 - ✅ Agent sees `[Attached file: name → /workspace/group/uploads/name]`
 - ✅ Audio/video mimetypes routed to Whisper transcription
 
-### Voice Note Transcription
-- ✅ `src/transcription.ts`: `isAudioMimetype()` + `transcribeAudioFile()` via OpenAI Whisper
-- ✅ Dynamic `import('openai')` — zero overhead when `OPENAI_API_KEY` not set
-- ✅ Agent sees `[Voice: transcript]`; falls back to file path if key absent
-- ✅ `openai` npm package added; `.env.example` updated
-
 ### Watchdog Auto-Restart
 - ✅ `scripts/watchdog.sh`: single-shot health check, 3-failure threshold, state file, `launchctl kickstart` on failure
 - ✅ `INTEL_SETUP.md`: Watchdog Setup section with launchd plist template
@@ -162,7 +156,6 @@ nanoclaw/
 │   ├── index.ts              # Orchestrator — starts API + message loop
 │   ├── api.ts                # REST API (Phase 5 + /tasks/:id/runs)
 │   ├── channels/slack.ts     # Slack Bolt, Socket Mode, file uploads, voice
-│   ├── transcription.ts      # OpenAI Whisper voice transcription
 │   ├── config.ts             # MODEL_DEFAULT, MODEL_COMPLEX, MODEL_FAST
 │   ├── db.ts                 # SQLite — getRecentMessages(), getTaskRunLogs()
 │   ├── container-runner.ts   # Agent spawner — passes model to container
@@ -342,7 +335,6 @@ npm install && npm run build
 ### Session 10 — Task history, File uploads, Watchdog, Voice (2026-03-02)
 - **Task run history:** `GET /api/tasks/:id/runs` + `getTaskRunLogs()` in db.ts; Tasks page shows ◷ button per row → expandable sub-row with run table (time, duration, status badge, result snippet)
 - **Slack file uploads:** `slack.ts` handles `file_share` subtype + `files[]` on any message; downloads to `groups/{folder}/uploads/` (50MB cap, sanitised filenames); agent sees `[Attached file: name → /workspace/group/uploads/name]`
-- **Voice transcription:** `src/transcription.ts` — `isAudioMimetype()` + `transcribeAudioFile()` via OpenAI Whisper; audio/video mimetypes auto-transcribed after download → agent sees `[Voice: transcript]`; graceful fallback if no `OPENAI_API_KEY`; `openai` npm package added
 - **Watchdog:** `scripts/watchdog.sh` — single-shot health check vs `/api/health`, 3-failure threshold, state file, restarts via `launchctl kickstart`; `INTEL_SETUP.md` updated with plist template
 
 ### Session 9 — Analytics + UI Redesign (2026-03-02)
