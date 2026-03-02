@@ -41,6 +41,10 @@ interface Particle {
         <span class="nav-icon">▣</span>
         <span class="nav-label">AUDIT</span>
       </a>
+      <a routerLink="/analytics" routerLinkActive="active">
+        <span class="nav-icon">◎</span>
+        <span class="nav-label">ANALYTICS</span>
+      </a>
 
       <div class="sidebar-footer">
         <div class="node-status">

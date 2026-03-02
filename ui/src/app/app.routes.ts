@@ -18,4 +18,8 @@ export const routes: Routes = [
     path: 'audit',
     loadComponent: () => import('./pages/audit/audit.component').then(m => m.AuditComponent),
   },
+  {
+    path: 'analytics',
+    loadComponent: () => import('./pages/analytics/analytics.component').then(m => m.AnalyticsComponent),
+  },
 ];

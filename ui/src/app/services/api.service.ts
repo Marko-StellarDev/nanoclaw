@@ -32,6 +32,7 @@ export interface MonthlyUsage {
   budget: number;
   budget_used_pct: number;
   last_updated: string;
+  model?: string;
 }
 
 export interface Task {
