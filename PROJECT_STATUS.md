@@ -1,6 +1,6 @@
 # NanoClaw Project Status
 
-**Last Updated:** 2026-03-02 (Session 10: Task run history, file uploads, watchdog, voice transcription)
+**Last Updated:** 2026-03-02 (Session 10: Task run history, Slack file uploads, watchdog)
 **Session Recovery Document** - Read this first when reopening terminal
 
 ---
@@ -140,7 +140,6 @@
 - ✅ `src/channels/slack.ts`: handles `file_share` subtype + `files[]` on any message
 - ✅ Downloads to `groups/{folder}/uploads/` (50MB cap, sanitised names)
 - ✅ Agent sees `[Attached file: name → /workspace/group/uploads/name]`
-- ✅ Audio/video mimetypes routed to Whisper transcription
 
 ### Watchdog Auto-Restart
 - ✅ `scripts/watchdog.sh`: single-shot health check, 3-failure threshold, state file, `launchctl kickstart` on failure
@@ -155,7 +154,7 @@ nanoclaw/
 ├── src/
 │   ├── index.ts              # Orchestrator — starts API + message loop
 │   ├── api.ts                # REST API (Phase 5 + /tasks/:id/runs)
-│   ├── channels/slack.ts     # Slack Bolt, Socket Mode, file uploads, voice
+│   ├── channels/slack.ts     # Slack Bolt, Socket Mode, file uploads
 │   ├── config.ts             # MODEL_DEFAULT, MODEL_COMPLEX, MODEL_FAST
 │   ├── db.ts                 # SQLite — getRecentMessages(), getTaskRunLogs()
 │   ├── container-runner.ts   # Agent spawner — passes model to container
@@ -332,7 +331,7 @@ npm install && npm run build
 - Added Audit Log UI page with live auto-refresh
 - Added tool-use activity logging: .activity.jsonl hook + API merge + UI display
 
-### Session 10 — Task history, File uploads, Watchdog, Voice (2026-03-02)
+### Session 10 — Task history, File uploads, Watchdog (2026-03-02)
 - **Task run history:** `GET /api/tasks/:id/runs` + `getTaskRunLogs()` in db.ts; Tasks page shows ◷ button per row → expandable sub-row with run table (time, duration, status badge, result snippet)
 - **Slack file uploads:** `slack.ts` handles `file_share` subtype + `files[]` on any message; downloads to `groups/{folder}/uploads/` (50MB cap, sanitised filenames); agent sees `[Attached file: name → /workspace/group/uploads/name]`
 - **Watchdog:** `scripts/watchdog.sh` — single-shot health check vs `/api/health`, 3-failure threshold, state file, restarts via `launchctl kickstart`; `INTEL_SETUP.md` updated with plist template
