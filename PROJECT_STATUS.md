@@ -300,6 +300,13 @@ npm install && npm run build
 - Added Audit Log UI page with live auto-refresh
 - Added tool-use activity logging: .activity.jsonl hook + API merge + UI display
 
+### Session 8 (2026-03-02)
+- Default model changed to haiku (fast, cheap)
+- `sonnet:` / `opus:` message prefix upgrades model for that run — `resolveModel()` in `index.ts`
+- `runAgent()` now takes explicit `model` param; passed to `runContainerAgent()` and `storeMessageDirect()`
+- `MODEL_SONNET` constant added to `config.ts`
+- `groups/global/CLAUDE.md`: agent instructed to ask user before upgrading, explains prefix convention
+
 ### Session 7 (2026-03-02)
 - Model tracking in audit log: `model` column on both `messages` and `task_run_logs` (auto-migrated, existing bot rows backfilled)
 - `storeMessageDirect()` accepts `model`; `src/index.ts` passes `MODEL_DEFAULT` for every bot response

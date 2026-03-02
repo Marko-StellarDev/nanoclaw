@@ -131,6 +131,9 @@ Container (per group)
   - `MAX_CONCURRENT_CONTAINERS` - 5 (default)
   - `SCHEDULER_POLL_INTERVAL` - 60s task polling
   - Paths: `STORE_DIR`, `GROUPS_DIR`, `DATA_DIR`, etc.
+  - `MODEL_DEFAULT` = haiku (fast/cheap default for all runs)
+  - `MODEL_SONNET` = claude-sonnet-4-6 (triggered by `sonnet:` message prefix)
+  - `MODEL_COMPLEX` = claude-opus-4-6 (triggered by `opus:` message prefix)
 
 **`src/env.ts` (43 lines)**
 - `readEnvFile(keys)` - Parse `.env` without loading to `process.env`
