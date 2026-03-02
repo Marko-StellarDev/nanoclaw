@@ -103,11 +103,11 @@ const FOLDER = 'keb-ops';
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let m of messages">
+            <tr *ngFor="let m of messages" [class.bot-row]="m.is_bot_message">
               <td class="mono" style="white-space:nowrap">{{ m.timestamp | date:'dd MMM HH:mm' }}</td>
               <td>
                 <span class="badge" [class.bot]="m.is_bot_message" [class.user]="!m.is_bot_message">
-                  {{ m.is_bot_message ? 'Bot' : (m.sender_name || 'User') }}
+                  {{ m.is_bot_message ? 'StellarBot' : (m.sender_name || 'User') }}
                 </span>
               </td>
               <td class="msg-content">{{ m.content }}</td>
@@ -167,6 +167,7 @@ const FOLDER = 'keb-ops';
     .prompt-cell { max-width: 300px; color: var(--text-muted); font-size: 13px; }
     .result-cell { max-width: 200px; font-size: 12px; color: var(--text-muted); }
     .msg-content { font-size: 13px; max-width: 600px; white-space: pre-wrap; word-break: break-word; }
+    .bot-row td { background: rgba(99,102,241,0.04); border-left: 2px solid var(--accent); }
   `],
 })
 export class KebComponent implements OnInit {

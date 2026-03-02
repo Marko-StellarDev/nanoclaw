@@ -713,6 +713,10 @@ async function main(): Promise<void> {
       sessionUsage.cache_read_input_tokens += queryResult.usage.cache_read_input_tokens;
       sessionUsage.cache_creation_input_tokens += queryResult.usage.cache_creation_input_tokens;
 
+      // Write usage after every query turn so data is persisted even if the
+      // container is killed by SIGKILL (timeout) before the loop exits cleanly.
+      updateMonthlyUsage(queryResult.usage, sdkEnv.ANTHROPIC_MODEL || 'claude-sonnet-4-6');
+
       // If _close was consumed during the query, exit immediately.
       // Don't emit a session-update marker (it would reset the host's
       // idle timer and cause a 30-min delay before the next _close).

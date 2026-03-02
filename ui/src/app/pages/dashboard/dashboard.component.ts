@@ -47,7 +47,7 @@ interface GroupState {
           <div *ngFor="let m of gs.messages.slice(-8)" class="message" [class.bot]="m.is_bot_message">
             <div class="msg-meta">
               <span class="badge" [class.bot]="m.is_bot_message" [class.user]="!m.is_bot_message">
-                {{ m.is_bot_message ? 'Bot' : m.sender_name || 'User' }}
+                {{ m.is_bot_message ? 'StellarBot' : m.sender_name || 'User' }}
               </span>
               <span class="msg-time">{{ m.timestamp | date:'HH:mm' }}</span>
             </div>
