@@ -1,6 +1,6 @@
 # NanoClaw Codebase Index
 
-**Last Updated:** 2026-03-02 (Session 5 — Chat input, task controls, agent status, task creation)
+**Last Updated:** 2026-03-02 (Session 5 — Chat input, task controls, agent status, task creation, schedule humaniser + dropdown)
 **Total Size:** ~35k tokens (17% of 200k context)
 
 **⚠️ SESSION RECOVERY:** If terminal closes, read `PROJECT_STATUS.md` first - contains todo list, completed work, and next steps
@@ -325,7 +325,7 @@ Container (per group)
 - Angular 17 standalone app, served on `:4200` (`cd ui && npm start`)
 - **Dashboard** — group cards with live chat input (Enter to send), pulsing green dot + typing indicator when agent is thinking (polls `/api/status` every 5s), auto-refreshes messages
 - **KEB Ops** — branch network, token usage stats, tasks, message history
-- **Tasks** — task table with pause/resume/cancel buttons, "+ New Task" form (group, schedule, prompt, context mode)
+- **Tasks** — task table with pause/resume/cancel buttons, `scheduleLabel()` converts cron/ms/once to plain English; "+ New Task" form with preset schedule dropdown (14 cron, 8 interval presets + datetime-local picker for once; "Custom…" reveals raw input)
 - **Audit Log** — messages + task runs + tool activity, live 5s refresh
 - Proxies `/api` to `:3001` via `proxy.conf.json` — **must use `npm start`**, not `npx ng serve`
 

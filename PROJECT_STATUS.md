@@ -307,6 +307,7 @@ npm install && npm run build
 - Task creation form: "+ New Task" with group, schedule type/value, context mode, prompt
 - New API endpoints: GET /api/status, POST /api/groups/:folder/message, POST/DELETE /api/tasks/*
 - Humanised schedule display: cron/ms → plain English ("Weekdays at 9 AM", "Every 4 hr", etc.)
+- Task creation form: schedule value replaced with preset dropdown (14 cron, 8 interval presets) + datetime picker for once; Custom… escape hatch for raw values
 
 ---
 
