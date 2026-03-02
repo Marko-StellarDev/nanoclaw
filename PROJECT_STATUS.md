@@ -1,6 +1,6 @@
 # NanoClaw Project Status
 
-**Last Updated:** 2026-03-02 (Session 9: Sci-fi UI redesign + Analytics page complete)
+**Last Updated:** 2026-03-02 (Session 10: Task run history, file uploads, watchdog, voice transcription)
 **Session Recovery Document** - Read this first when reopening terminal
 
 ---
@@ -309,6 +309,12 @@ npm install && npm run build
 - Removed @mention requirement: all messages processed, dedup for @mentions
 - Added Audit Log UI page with live auto-refresh
 - Added tool-use activity logging: .activity.jsonl hook + API merge + UI display
+
+### Session 10 — Task history, File uploads, Watchdog, Voice (2026-03-02)
+- **Task run history:** `GET /api/tasks/:id/runs` + `getTaskRunLogs()` in db.ts; Tasks page shows ◷ button per row → expandable sub-row with run table (time, duration, status badge, result snippet)
+- **Slack file uploads:** `slack.ts` handles `file_share` subtype + `files[]` on any message; downloads to `groups/{folder}/uploads/` (50MB cap, sanitised filenames); agent sees `[Attached file: name → /workspace/group/uploads/name]`
+- **Voice transcription:** `src/transcription.ts` — `isAudioMimetype()` + `transcribeAudioFile()` via OpenAI Whisper; audio/video mimetypes auto-transcribed after download → agent sees `[Voice: transcript]`; graceful fallback if no `OPENAI_API_KEY`; `openai` npm package added
+- **Watchdog:** `scripts/watchdog.sh` — single-shot health check vs `/api/health`, 3-failure threshold, state file, restarts via `launchctl kickstart`; `INTEL_SETUP.md` updated with plist template
 
 ### Session 9 — Analytics + UI Redesign (2026-03-02)
 - Complete sci-fi "neural interface" redesign of Angular UI

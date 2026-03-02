@@ -178,7 +178,7 @@ Container (per group)
 
 ### Channels
 
-**`src/channels/slack.ts` (348 lines)**
+**`src/channels/slack.ts` (~400 lines)**
 - Slack integration via @slack/bolt with Socket Mode
 - **Class:** `SlackChannel implements Channel`
 - **Key Methods:**
@@ -194,6 +194,7 @@ Container (per group)
   - Offline message queue
   - Markdown formatting (mrkdwn)
 - **JID Format:** `slack:{channelId}` where channelId starts with C (channel) or D (DM)
+- **File uploads:** `message` + `file_share` events with `files[]` — downloads to `groups/{folder}/uploads/` (50MB cap); audio mimetypes transcribed via Whisper; agent sees `[Voice: transcript]` or `[Attached file: name → /workspace/group/uploads/name]`
 
 ### Container System
 
@@ -313,6 +314,13 @@ Container (per group)
 
 ### Web Dashboard
 
+**`src/transcription.ts` (56 lines)**
+- Voice note transcription via OpenAI Whisper API
+- **Exports:** `isAudioMimetype(mimetype)`, `transcribeAudioFile(filePath)`
+- Dynamic `import('openai')` — only loads when a voice note arrives
+- Uses `readEnvFile(['OPENAI_API_KEY'])` — gracefully skips if key not set
+- Called from `src/channels/slack.ts` after file download; falls back to file path
+
 **`src/agent-status.ts` (21 lines)**
 - Shared in-memory status registry
 - **Exports:** `setAgentStatus(folder, 'thinking'|'idle')`, `clearAgentStatus(folder)`, `getAgentStatuses()`
@@ -338,6 +346,7 @@ Container (per group)
 - **KEB Ops** (`// 02 KEB OPS`) — node-indexed branches (N01..N07), segmented budget bar with 25/50/75% markers, token telemetry, tasks, message history
 - **Tasks** (`// 03 TASK SCHEDULER`) — task table with pause/resume/cancel buttons, `scheduleLabel()` converts cron/ms/once to plain English; "+ New Task" form with preset schedule dropdown (14 cron, 8 interval presets + datetime-local picker for once; "Custom…" reveals raw input)
 - **Audit Log** (`// 04 AUDIT STREAM`) — messages + task runs + tool activity, live 5s refresh; bot + task rows show model tag (e.g. `sonnet-4.6`) in the type column; tool rows use geometric glyphs (⚙ ◎ ◉ ▤ ▦ ▣ ◈)
+- **Task run history:** `◷ HISTORY` button per task row → expandable sub-row showing `task_run_logs` entries (run time, duration, status badge, result snippet). Backed by `GET /api/tasks/:id/runs`.
 - **Analytics** (`// 05 ANALYTICS`) — `analytics.component.ts`; 4 stat cards (cost this month, total tokens, cache hit rate, avg cost/run); canvas bar chart (6-month cost trend, retina-aware `devicePixelRatio`, per-group colours, dollar labels, dashed current-month outline); CSS stacked token bars (input/output/cache-write/cache-read); model pricing reference table (haiku/sonnet/opus with active model badge); usage history table (all months × all groups, newest-first). Pricing: haiku $0.80/$4.00, sonnet $3.00/$15.00, opus $15.00/$75.00 per 1M tokens (input/output). `calcCost()` includes cache read/write tokens.
 - Proxies `/api` to `:3001` via `proxy.conf.json` — **must use `npm start`**, not `npx ng serve`
 
