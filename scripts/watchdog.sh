@@ -39,11 +39,12 @@ else
   log "Health check FAILED — consecutive failures: ${FAILURES}/${MAX_FAILURES}"
 
   if [ "$FAILURES" -ge "$MAX_FAILURES" ]; then
-    log "Restarting service: ${SERVICE_LABEL}"
     if [[ "$PLATFORM" == "macos" ]]; then
+      log "Restarting service: ${SERVICE_LABEL} (launchd)"
       launchctl kickstart -k "gui/$(id -u)/${SERVICE_LABEL}" >> "$LOG_FILE" 2>&1 || \
         log "WARNING: launchctl kickstart failed — service may need manual restart"
     else
+      log "Restarting service: nanoclaw (systemd)"
       systemctl --user restart nanoclaw >> "$LOG_FILE" 2>&1 || \
         log "WARNING: systemctl restart failed — service may need manual restart"
     fi
