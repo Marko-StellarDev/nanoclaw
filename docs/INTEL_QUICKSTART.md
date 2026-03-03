@@ -1,36 +1,96 @@
-# Production Setup — Ubuntu Desktop on Intel Mac
+# Production Setup — Ubuntu Server 24.04 LTS on Intel MacBook Pro 13" (2016)
 
-Getting StellarBot running on Ubuntu 24.04 LTS Desktop (Intel Mac). Two phases: manual prerequisites, then hand off to Claude Code.
+**Hardware:** MacBook Pro 13" 2016 — Core i5 2.3GHz, 8GB RAM, 512GB SSD
+**OS:** Ubuntu Server 24.04 LTS (no desktop — lighter, more RAM for containers)
+**Role:** Headless production server, SSH-managed from M1 Mac
+
+Two phases: manual prerequisites (at the Intel Mac), then hand off to Claude Code.
 
 ---
 
-## Phase 1 — Manual (Terminal on Ubuntu)
+## Phase 1 — Manual (at the Intel Mac, lid open for install — ~15 min, then SSH forever)
 
-### 1. Install Ubuntu 24.04 LTS Desktop
+### 1. Install Ubuntu Server 24.04 LTS
 
-Download the ISO from https://ubuntu.com/download/desktop and flash it to a USB drive (use Balena Etcher on your M1).
+Download the **Server** ISO (not Desktop) from https://ubuntu.com/download/server and flash to USB with Balena Etcher on your M1.
+
+Do the install with the **MacBook lid open** — the built-in screen and keyboard are all you need. No external monitor required. Once SSH is set up you'll never need a screen again.
 
 Boot the Intel Mac from USB: hold **Option** at startup, select the USB drive.
 
 During install:
-- Check **"Install third-party software for graphics and Wi-Fi"** — this handles Broadcom Wi-Fi automatically
-- Create user `marko` (or whatever you prefer — just be consistent)
-- Enable **automatic login** if this will be a headless-ish machine
+- Choose **Ubuntu Server (minimized)** — even lighter footprint
+- **Network:** connect ethernet for install (Wi-Fi driver installs later if needed)
+- **Storage:** use the full 512GB disk, guided LVM is fine
+- Create user **`marko`** with a password you'll remember
+- When asked about **OpenSSH server** — check **Install OpenSSH server** (required for remote access)
+- Skip snaps (select Done without choosing any)
 
-After install, open **Terminal** (Ctrl+Alt+T).
+After install the machine reboots into a terminal login prompt — no GUI, that's correct.
 
 ---
 
-### 2. Install Docker
+### 2. Log in and get the IP address
 
-No Docker Desktop needed on Linux — just the engine:
+Log in with username `marko` and your password. Then:
+
+```bash
+ip addr show | grep "inet " | grep -v 127.0.0.1
+```
+
+Note the IP address (e.g. `192.168.1.50`). From this point on you can SSH in from your M1 and close the monitor/keyboard:
+
+```bash
+# On your M1 Mac
+ssh marko@192.168.1.50
+```
+
+---
+
+### 3. Disable lid-close suspend
+
+Without this, closing the MacBook lid will suspend the machine and kill the bot.
+
+```bash
+sudo nano /etc/systemd/logind.conf
+```
+
+Find and uncomment (or add) these three lines — change `suspend` to `ignore`:
+
+```
+HandleLidSwitch=ignore
+HandleLidSwitchExternalPower=ignore
+HandleLidSwitchDocked=ignore
+```
+
+Save: `Ctrl+O`, `Enter`, `Ctrl+X`. Apply immediately:
+
+```bash
+sudo systemctl restart systemd-logind
+```
+
+You can now close the lid and the machine keeps running.
+
+---
+
+### 4. Install Docker Engine
+
+No Docker Desktop on Linux — just the engine:
 
 ```bash
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER
 ```
 
-**Log out and back in** (or reboot) so the group membership takes effect. Then verify:
+**Log out and back in** (or reboot) so the group membership takes effect:
+
+```bash
+exit
+# SSH back in
+ssh marko@192.168.1.50
+```
+
+Verify:
 
 ```bash
 docker ps  # should show empty list, no "permission denied"
@@ -38,17 +98,32 @@ docker ps  # should show empty list, no "permission denied"
 
 ---
 
-### 3. Install Node.js 22
+### 5. Install Node.js 22
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
-node --version  # should print v22.x.x
+node --version   # should print v22.x.x
+npm --version
 ```
 
 ---
 
-### 4. Install Git and clone the repo
+### 6. Install nginx
+
+nginx will serve the built Angular UI statically on port 80 — no Node dev server needed in production.
+
+```bash
+sudo apt-get install -y nginx
+sudo systemctl enable nginx
+sudo systemctl start nginx
+```
+
+Verify: `curl http://localhost` — should return the default nginx page.
+
+---
+
+### 7. Install Git and clone the repo
 
 ```bash
 sudo apt-get install -y git
@@ -59,10 +134,10 @@ cd nanoclaw
 
 ---
 
-### 5. Create the `.env` file
+### 8. Create the `.env` file
 
 ```bash
-nano .env
+nano ~/nanoclaw/.env
 ```
 
 Paste in (fill in your real values):
@@ -74,17 +149,18 @@ ANTHROPIC_API_KEY=sk-ant-api03-YOUR_KEY
 ASSISTANT_NAME=StellarBot
 TZ=Africa/Johannesburg
 MAX_CONCURRENT_CONTAINERS=2
+API_HOST=127.0.0.1
 ```
 
 Save: `Ctrl+O`, `Enter`, `Ctrl+X`.
 
 ```bash
-chmod 600 .env
+chmod 600 ~/nanoclaw/.env
 ```
 
 ---
 
-### 6. Install Claude Code
+### 9. Install Claude Code
 
 ```bash
 npm install -g @anthropic-ai/claude-code
@@ -92,9 +168,7 @@ npm install -g @anthropic-ai/claude-code
 
 ---
 
-## Phase 2 — Claude Code Session
-
-Open Terminal and start Claude Code in the project directory:
+## Phase 2 — Claude Code Session (SSH from M1 or directly on Intel Mac)
 
 ```bash
 cd ~/nanoclaw
@@ -110,7 +184,7 @@ claude
 /setup
 ```
 
-Claude Code will run preflight checks automatically. Let it work through them.
+Claude Code runs preflight checks automatically. Let it work through them.
 
 ---
 
@@ -140,7 +214,7 @@ Then paste your `ANTHROPIC_API_KEY` when prompted (or confirm it's already in `.
 
 ### Step 4 — Skip WhatsApp auth
 
-The setup skill may ask about WhatsApp authentication — this project uses **Slack**, not WhatsApp. If it comes up:
+If it asks about WhatsApp:
 
 **Say:**
 ```
@@ -151,10 +225,9 @@ Skip WhatsApp — this project uses Slack. The tokens are already in the .env fi
 
 ### Step 5 — Channel registration
 
-Get your Slack channel ID first: in Slack, right-click your KEB ops channel → **View channel details** → scroll to the bottom — it shows `Channel ID: C0123ABCDEF`.
+Get your Slack channel ID: in Slack, right-click the KEB ops channel → **View channel details** → scroll to bottom → `Channel ID: C0123ABCDEF`.
 
-Then say:
-
+**Say:**
 ```
 Register the keb-ops group with my production Slack channel. Channel ID is C0123ABCDEF, folder is keb-ops, no trigger prefix required, assistant name is StellarBot.
 ```
@@ -163,9 +236,7 @@ Register the keb-ops group with my production Slack channel. Channel ID is C0123
 
 ---
 
-### Step 6 — Start the service
-
-When setup asks about starting the background service:
+### Step 6 — Start the systemd service
 
 **Say:**
 ```
@@ -176,7 +247,7 @@ The `/setup` skill detects Linux automatically and uses systemd instead of launc
 
 ---
 
-### Step 7 — Watchdog
+### Step 7 — Watchdog timer
 
 Once the main service is running:
 
@@ -187,17 +258,95 @@ Set up the watchdog on Linux using a systemd timer. The watchdog script is at sc
 
 ---
 
-## Phase 3 — Verify
+## Phase 3 — Build and Serve the UI
 
-Once everything is set up, say:
+### 1. Build the Angular UI
+
+```bash
+cd ~/nanoclaw
+npm install            # install bot dependencies
+
+cd ~/nanoclaw/ui
+npm install            # install UI dependencies
+npm run build          # produces ui/dist/nanoclaw-ui/browser/
+```
+
+This takes 1–2 minutes. Output lands in `~/nanoclaw/ui/dist/nanoclaw-ui/browser/`.
+
+---
+
+### 2. Configure nginx
+
+Create the nginx site config:
+
+```bash
+sudo nano /etc/nginx/sites-available/nanoclaw
+```
+
+Paste exactly:
+
+```nginx
+server {
+    listen 80;
+    server_name _;
+
+    root /home/marko/nanoclaw/ui/dist/nanoclaw-ui/browser;
+    index index.html;
+
+    # Proxy API calls to the Node.js backend
+    location /api/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # Angular router — all unmatched routes serve index.html
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+Save: `Ctrl+O`, `Enter`, `Ctrl+X`.
+
+Enable the site and reload nginx:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/nanoclaw /etc/nginx/sites-enabled/
+sudo rm /etc/nginx/sites-enabled/default    # remove default placeholder page
+sudo nginx -t                               # verify config — should say "ok"
+sudo systemctl reload nginx
+```
+
+---
+
+### 3. Access the UI
+
+From any browser on your local network:
+
+```
+http://192.168.1.50
+```
+
+*(Use whatever IP you found in step 2. No port number needed — nginx serves on port 80.)*
+
+The API calls (`/api/...`) are proxied transparently to the Node.js backend on port 3001.
+
+---
+
+## Phase 4 — Verify Everything
+
+In the Claude Code session say:
 
 ```
 Check service status and show me the last 20 lines of the log
 ```
 
-Then go to Slack and send a message in your KEB ops channel. You should get a response within a few seconds.
+Then go to Slack and send a message in the KEB ops channel. You should get a response within a few seconds.
 
-If no response after 30 seconds, say:
+If no response after 30 seconds:
 
 ```
 The bot isn't responding to Slack messages. Check the logs and diagnose what's wrong.
@@ -205,9 +354,7 @@ The bot isn't responding to Slack messages. Check the logs and diagnose what's w
 
 ---
 
-## Phase 4 — Register Personal Channel (Optional)
-
-Get that channel ID from Slack the same way, then say:
+## Phase 5 — Register Personal Channel (Optional)
 
 ```
 Register the personal group. Channel ID is C0123XXXXXX, folder is personal, no trigger prefix required, assistant name is StellarBot.
@@ -218,32 +365,41 @@ Register the personal group. Channel ID is C0123XXXXXX, folder is personal, no t
 ## Quick Reference (day-to-day)
 
 ```bash
-# Restart bot
+# SSH in from M1
+ssh marko@192.168.1.50
+
+# Bot service
 systemctl --user restart nanoclaw
-
-# Stop bot
 systemctl --user stop nanoclaw
-
-# Start bot
 systemctl --user start nanoclaw
+systemctl --user status nanoclaw
 
 # Watch logs live
 journalctl --user -u nanoclaw -f
-# or
-tail -f ~/nanoclaw/logs/nanoclaw.log
 
 # Deploy an update pushed from M1
 cd ~/nanoclaw && ./deploy.sh
+
+# Rebuild UI after a UI code change
+cd ~/nanoclaw/ui && npm run build
+# nginx serves the new files immediately — no restart needed
 ```
 
 ---
 
 ## If Things Go Wrong
 
+**Wi-Fi not working (if not using ethernet):**
+```bash
+sudo apt-get install -y linux-modules-extra-$(uname -r)
+sudo reboot
+```
+
 **Docker permission denied after install:**
 ```bash
-# Make sure you logged out and back in after: sudo usermod -aG docker $USER
-# Or run: newgrp docker
+# Log out and back in after: sudo usermod -aG docker $USER
+# Or immediately in the current session:
+newgrp docker
 ```
 
 **Container build fails:**
@@ -261,8 +417,17 @@ The systemd service won't start. Check the unit file, the Node.js path, and the 
 The bot connects but isn't responding to messages in the keb-ops channel. Check the channel registration in the database and the trigger settings.
 ```
 
-**Wi-Fi not working after install:**
+**nginx 502 Bad Gateway on /api/ routes:**
 ```bash
-sudo ubuntu-drivers autoinstall
-sudo reboot
+# The Node.js API isn't running on port 3001
+systemctl --user status nanoclaw
+journalctl --user -u nanoclaw -f
+```
+
+**UI shows blank page after deploy:**
+```bash
+# Rebuild the UI
+cd ~/nanoclaw/ui && npm run build
+# Check nginx is pointing to the right path
+sudo nginx -t && sudo systemctl reload nginx
 ```
