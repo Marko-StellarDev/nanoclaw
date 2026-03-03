@@ -94,6 +94,7 @@ import { ApiService, Task, Group, NewTask, TaskRun } from '../../services/api.se
 
     <!-- Task table -->
     <div *ngIf="!loading && tasks.length > 0" class="card">
+      <div class="table-wrap">
       <table>
         <thead>
           <tr>
@@ -153,6 +154,7 @@ import { ApiService, Task, Group, NewTask, TaskRun } from '../../services/api.se
           </ng-container>
         </tbody>
       </table>
+      </div>
     </div>
 
     <!-- Summary -->
@@ -499,6 +501,13 @@ import { ApiService, Task, Group, NewTask, TaskRun } from '../../services/api.se
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    @media (max-width: 600px) {
+      .page-header { flex-wrap: wrap; gap: 10px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .form-group.full-width { grid-column: 1; }
+      .cmd-btn { padding: 6px 10px; }
     }
   `],
 })

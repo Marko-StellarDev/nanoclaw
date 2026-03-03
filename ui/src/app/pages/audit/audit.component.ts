@@ -32,6 +32,7 @@ import { ApiService, AuditEvent, Group } from '../../services/api.service';
     </div>
 
     <div *ngIf="!loading && events.length > 0" class="card event-card">
+      <div class="table-wrap">
       <table>
         <thead>
           <tr>
@@ -56,6 +57,7 @@ import { ApiService, AuditEvent, Group } from '../../services/api.service';
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
 
     <div class="stream-footer" *ngIf="events.length > 0">
@@ -246,6 +248,12 @@ import { ApiService, AuditEvent, Group } from '../../services/api.service';
       font-size: 12px;
       color: var(--text-muted);
       padding: 20px 0;
+    }
+
+    @media (max-width: 600px) {
+      .page-header { flex-wrap: wrap; gap: 10px; }
+      .controls { flex-wrap: wrap; }
+      .stream-footer { flex-wrap: wrap; row-gap: 4px; }
     }
   `],
 })

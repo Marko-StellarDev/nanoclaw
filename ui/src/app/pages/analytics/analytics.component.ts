@@ -201,6 +201,7 @@ function modelShort(model?: string): string {
       <div class="card">
         <div class="section-title">USAGE HISTORY</div>
         <div *ngIf="historyRows.length === 0" class="empty">NO HISTORY RECORDED</div>
+        <div class="table-wrap">
         <table *ngIf="historyRows.length > 0">
           <thead>
             <tr>
@@ -243,6 +244,7 @@ function modelShort(model?: string): string {
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
 
       <!-- ── Total footer ─────────────────────────────────────────────────── -->
@@ -602,6 +604,19 @@ function modelShort(model?: string): string {
       font-size: 12px;
       color: var(--text-muted);
       padding: 20px 0;
+    }
+
+    @media (max-width: 768px) {
+      .page-header { flex-wrap: wrap; gap: 10px; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .chart-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+      .chart-legend { flex-wrap: wrap; gap: 8px; }
+      .breakdown-row { grid-template-columns: 58px 1fr 56px; }
+      .breakdown-runs { display: none; }
+      .pricing-row { flex-direction: column; align-items: flex-start; gap: 10px; }
+      .tier-name { min-width: unset; }
+      .tier-prices { gap: 12px; flex-wrap: wrap; }
+      .total-footer { flex-wrap: wrap; row-gap: 4px; }
     }
   `],
 })

@@ -84,6 +84,7 @@ const FOLDER = 'keb-ops';
       <div class="card full-width">
         <div class="section-title">SCHEDULED DIRECTIVES</div>
         <div *ngIf="tasks.length === 0" class="empty">NO ACTIVE DIRECTIVES</div>
+        <div class="table-wrap">
         <table *ngIf="tasks.length > 0">
           <thead>
             <tr>
@@ -107,6 +108,7 @@ const FOLDER = 'keb-ops';
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
 
       <!-- Conversation history -->
@@ -114,6 +116,7 @@ const FOLDER = 'keb-ops';
         <div class="section-title">TRANSMISSION HISTORY</div>
         <div *ngIf="loadingMessages" class="stream-loading">&gt; loading transmissions...</div>
         <div *ngIf="!loadingMessages && messages.length === 0" class="empty">NO TRANSMISSIONS RECORDED</div>
+        <div class="table-wrap">
         <table *ngIf="!loadingMessages && messages.length > 0">
           <thead>
             <tr>
@@ -134,6 +137,7 @@ const FOLDER = 'keb-ops';
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
 
     </div>
@@ -344,6 +348,10 @@ const FOLDER = 'keb-ops';
       font-size: 12px;
       color: var(--text-muted);
       padding: 16px 0;
+    }
+
+    @media (max-width: 600px) {
+      .keb-grid { grid-template-columns: 1fr; }
     }
   `],
 })

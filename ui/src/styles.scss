@@ -211,3 +211,23 @@ select, input, textarea {
 }
 
 input[type="datetime-local"] { color-scheme: dark; }
+
+/* ── Table scroll wrapper ─────────────────────────────────────────────────── */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Mobile ───────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .card { padding: 14px; }
+
+  /* Prevent iOS auto-zoom on focus */
+  select, input, textarea { font-size: 16px !important; }
+
+  /* Touch-friendly inputs */
+  select, input:not([type="datetime-local"]) { min-height: 44px; }
+
+  /* Touch-friendly buttons */
+  button { min-height: 36px; }
+}

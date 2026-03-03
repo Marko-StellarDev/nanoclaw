@@ -182,7 +182,7 @@ interface GroupState {
 
     .groups-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(min(500px, 100%), 1fr));
       gap: 20px;
     }
 
@@ -450,6 +450,13 @@ interface GroupState {
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 600px) {
+      .page-header { flex-wrap: wrap; }
+      .status-bar { width: 100%; }
+      .message-stream { max-height: 240px; }
+      .transmit-btn { width: 44px; height: 44px; }
+    }
   `],
 })
 export class DashboardComponent implements OnInit, OnDestroy {

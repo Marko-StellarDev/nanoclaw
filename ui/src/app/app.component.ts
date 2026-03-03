@@ -14,7 +14,19 @@ interface Particle {
   template: `
     <canvas #bgCanvas class="bg-canvas"></canvas>
 
-    <nav class="sidebar">
+    <div class="mobile-topbar">
+      <button class="hamburger" (click)="toggleSidebar()" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="mobile-logo">
+        <span class="mobile-logo-glyph">◈</span>
+        <span class="mobile-logo-name">NANOCLAW</span>
+      </div>
+    </div>
+
+    <div class="overlay" [class.active]="sidebarOpen" (click)="closeSidebar()"></div>
+
+    <nav class="sidebar" [class.open]="sidebarOpen">
       <div class="logo">
         <div class="logo-glyph">◈</div>
         <div class="logo-text">
@@ -25,23 +37,23 @@ interface Particle {
 
       <div class="nav-section-label">NAVIGATION</div>
 
-      <a routerLink="/dashboard" routerLinkActive="active">
+      <a routerLink="/dashboard" routerLinkActive="active" (click)="closeSidebar()">
         <span class="nav-icon">⬡</span>
         <span class="nav-label">SYSTEM</span>
       </a>
-      <a routerLink="/keb" routerLinkActive="active" class="keb-link">
+      <a routerLink="/keb" routerLinkActive="active" class="keb-link" (click)="closeSidebar()">
         <span class="nav-icon">◉</span>
         <span class="nav-label">KEB OPS</span>
       </a>
-      <a routerLink="/tasks" routerLinkActive="active">
+      <a routerLink="/tasks" routerLinkActive="active" (click)="closeSidebar()">
         <span class="nav-icon">◈</span>
         <span class="nav-label">TASKS</span>
       </a>
-      <a routerLink="/audit" routerLinkActive="active">
+      <a routerLink="/audit" routerLinkActive="active" (click)="closeSidebar()">
         <span class="nav-icon">▣</span>
         <span class="nav-label">AUDIT</span>
       </a>
-      <a routerLink="/analytics" routerLinkActive="active">
+      <a routerLink="/analytics" routerLinkActive="active" (click)="closeSidebar()">
         <span class="nav-icon">◎</span>
         <span class="nav-label">ANALYTICS</span>
       </a>
@@ -67,6 +79,61 @@ interface Particle {
       width: 100%; height: 100%;
       pointer-events: none;
       z-index: 0;
+    }
+
+    /* ── Mobile top bar (hidden on desktop) ── */
+    .mobile-topbar { display: none; }
+
+    .hamburger {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      width: 22px; height: 16px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      flex-shrink: 0;
+
+      span {
+        display: block;
+        width: 100%; height: 2px;
+        background: var(--cyan);
+        border-radius: 1px;
+        transition: opacity 0.2s;
+      }
+
+      &:hover span { opacity: 0.7; }
+    }
+
+    .mobile-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mobile-logo-glyph {
+      font-size: 18px;
+      color: var(--cyan);
+      text-shadow: 0 0 12px var(--cyan);
+    }
+
+    .mobile-logo-name {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      color: #fff;
+    }
+
+    /* ── Overlay ── */
+    .overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      z-index: 90;
+
+      &.active { display: block; }
     }
 
     .sidebar {
@@ -216,11 +283,46 @@ interface Particle {
       overflow-y: auto;
       padding: 28px 32px;
     }
+
+    /* ── Mobile breakpoint ── */
+    @media (max-width: 768px) {
+      .mobile-topbar {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        position: fixed;
+        top: 0; left: 0; right: 0;
+        height: 52px;
+        z-index: 110;
+        background: rgba(3, 12, 28, 0.96);
+        border-bottom: 1px solid rgba(0, 200, 255, 0.15);
+        padding: 0 16px;
+        backdrop-filter: blur(20px);
+      }
+
+      .sidebar {
+        position: fixed;
+        top: 0; left: -240px; bottom: 0;
+        z-index: 100;
+        transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+        &.open { left: 0; }
+      }
+
+      .content {
+        width: 100%;
+        padding: 68px 14px 20px;
+      }
+    }
   `],
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild('bgCanvas') canvasRef!: ElementRef<HTMLCanvasElement>;
   private animFrame = 0;
+  sidebarOpen = false;
+
+  toggleSidebar(): void { this.sidebarOpen = !this.sidebarOpen; }
+  closeSidebar(): void { this.sidebarOpen = false; }
 
   ngAfterViewInit(): void {
     this.initCanvas();
